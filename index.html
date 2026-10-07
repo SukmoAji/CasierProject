@@ -3,7 +3,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#1f3d33">
 <link rel="manifest" href="manifest.webmanifest">
-<title>Casier</title>
+<title>Kasir Eyang</title>
 <style>
 :root{--bg:#f2f3ee;--ink:#1c1a17;--g:#1f3d33;--mut:#6b6f68;--line:#d9dbd2;--hot:#b4430f}
 *{box-sizing:border-box}body{margin:0;font:16px/1.4 system-ui,sans-serif;background:var(--bg);color:var(--ink);padding-bottom:72px}
@@ -49,7 +49,7 @@ const idb=async(s,m,...a)=>{const d=await db;return new Promise((ok,no)=>{const 
 // ---- Supabase (REST, tanpa library)
 async function auth(body,grant){const r=await fetch(`${C.URL}/auth/v1/token?grant_type=${grant}`,{method:'POST',headers:{apikey:C.KEY,'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await r.json();if(!r.ok)throw new Error(j.error_description||j.msg||'Login gagal');ses={...j,exp:Date.now()+j.expires_in*1000};localStorage.setItem('ses',JSON.stringify(ses))}
 async function api(path,opt={}){if(Date.now()>ses.exp-60000)await auth({refresh_token:ses.refresh_token},'refresh_token');const r=await fetch(`${C.URL}/rest/v1/${path}`,{...opt,headers:{apikey:C.KEY,Authorization:'Bearer '+ses.access_token,'Content-Type':'application/json',...opt.headers}});const t=await r.text();if(!r.ok)throw new Error(t);return t?JSON.parse(t):null}
-async function pull(){const[m,d]=await Promise.all([api('menu_items?is_active=eq.true&order=category,name'),api('discounts?is_active=eq.true')]);await idb('menu','clear');await idb('discounts','clear');for(const x of m)await idb('menu','put',x);for(const x of d)await idb('discounts','put',x)}
+async function pull(){const since=encodeURIComponent(new Date(Date.now()-14*864e5).toISOString());const[m,d,T]=await Promise.all([api('menu_items?is_active=eq.true&order=category,name'),api('discounts?is_active=eq.true'),api('transactions?select=*,transaction_items(*),transaction_discounts(*)&created_at=gte.'+since)]);await idb('menu','clear');await idb('discounts','clear');for(const x of m)await idb('menu','put',x);for(const x of d)await idb('discounts','put',x);for(const{transaction_items:items,transaction_discounts:discs,...h}of T)await idb('tx','put',{id:h.id,h,items,discs,synced:1})}
 async function push(){const h={Prefer:'resolution=ignore-duplicates,return=minimal'},p=(t,b)=>b.length&&api(t+'?on_conflict=id',{method:'POST',headers:h,body:JSON.stringify(b)});
 for(const t of(await idb('tx','getAll')).filter(t=>!t.synced)){await p('transactions',[t.h]);await p('transaction_items',t.items);await p('transaction_discounts',t.discs);t.synced=1;await idb('tx','put',t)}}
 async function sync(){if(!ses)return;$('#st').textContent='Sync...';try{await push();await pull();await load();$('#st').textContent='Tersinkron'}catch(e){console.error(e);$('#st').textContent=navigator.onLine?'Sync gagal':'Offline'}}
