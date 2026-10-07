@@ -13,7 +13,7 @@ main{max-width:720px;margin:0 auto;padding:12px}
 select{font:inherit;padding:10px;border:1px solid var(--line);border-radius:8px;width:100%;background:#fff}
 .k{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}
 .k div{background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px}
-.k small{color:var(--mut)}.k b{display:block;font-size:20px}
+.k .split{display:flex}.k .split span{flex:1}.k .split span+span{border-left:1px solid var(--line);padding-left:12px}.k small{color:var(--mut)}.k b{display:block;font-size:20px}
 h3{margin:20px 0 6px}
 .b{display:grid;grid-template-columns:64px 1fr auto;gap:8px;align-items:center;padding:4px 0;font-size:14px}
 .b .t{background:#e4e6dd;height:14px;border-radius:3px;overflow:hidden}.b i{display:block;height:100%;background:var(--g)}
@@ -46,7 +46,7 @@ async function load(){$('#st').textContent='Memuat...';try{
 const[all,ex,mn,pf]=await Promise.all([fetchAll($('#pr').value),fetchEx($('#pr').value),api('menu_items?select=id,category&limit=1000'),api('profiles?select=id,name')]),ok=all.filter(t=>!t.voided_at),vd=all.length-ok.length;
 LAST={all,ex,ok};CM=Object.fromEntries(mn.map(m=>[m.id,m.category]));NM=Object.fromEntries(pf.map(p=>[p.id,p.name]));if(!ok.length&&!ex.length){$('#out').innerHTML='<p class="mut">Belum ada transaksi di periode ini.</p>';$('#st').textContent='';return}
 const om=sum(ok,t=>t.total);
-let h=`<div class="k"><div><small>Omzet</small><b>${rp(om)}</b></div><div><small>Transaksi</small><b>${ok.length}</b></div><div><small>Rata-rata/transaksi</small><b>${rp(ok.length?om/ok.length:0)}</b></div><div><small>Total diskon</small><b>${rp(sum(ok,t=>t.discount_total))}</b></div><div><small>Belanja</small><b>${rp(sum(ex,e=>e.amount))}</b></div><div><small>Omzet − belanja</small><b>${rp(om-sum(ex,e=>e.amount))}</b></div></div>`;
+let h=`<div class="k"><div><small>Omzet</small><b>${rp(om)}</b></div><div class="split"><span><small>Transaksi</small><b>${ok.length}</b></span><span><small>Total cup</small><b id="kc">-</b></span></div><div><small>Rata-rata/transaksi</small><b>${rp(ok.length?om/ok.length:0)}</b></div><div><small>Total diskon</small><b>${rp(sum(ok,t=>t.discount_total))}</b></div><div><small>Belanja</small><b>${rp(sum(ex,e=>e.amount))}</b></div><div><small>Omzet − belanja</small><b>${rp(om-sum(ex,e=>e.amount))}</b></div></div>`;
 if(vd)h+=`<p class="mut">${vd} transaksi dibatalkan (tidak dihitung)</p>`;
 h+='<h3>Cup terjual</h3><div id="cup"></div>';
 const pg=grp(ok,t=>t.payment_method);h+='<h3>Metode bayar</h3>'+bars(Object.entries(pg).map(([k,a])=>[PM[k]||k,sum(a,t=>t.total),`${rp(sum(a,t=>t.total))} · ${a.length}x`]));
@@ -61,6 +61,7 @@ function renderCup(){const ok=LAST.ok,q={},p=$('#pr').value;
 ok.forEach(t=>(t.transaction_items||[]).forEach(i=>{const c=CM[i.menu_item_id]||'Lainnya';q[c]=(q[c]||0)+i.qty}));
 const cats=Object.keys(q).sort(),saved=JSON.parse(localStorage.getItem('cupCats')||'null'),on=saved||cats.filter(c=>!/makan|food|snack|roti|cemil/i.test(c));
 const inCup=i=>on.includes(CM[i.menu_item_id]||'Lainnya'),tot=cats.filter(c=>on.includes(c)).reduce((a,c)=>a+q[c],0),tg=+localStorage.getItem('cupTarget_'+p)||0;
+{const kc=$('#kc');if(kc)kc.textContent=tot}
 const pk={};ok.forEach(t=>(t.transaction_items||[]).forEach(i=>{if(inCup(i)){const n=NM[t.created_by]||'Lainnya/lama';pk[n]=(pk[n]||0)+i.qty}}));
 $('#cup').innerHTML=`<div class="k"><div><small>Total cup</small><b>${tot}</b></div><div><small>Target periode ini</small><input id="tg" type="number" inputmode="numeric" value="${tg||''}" placeholder="isi target" style="padding:4px"></div></div>`
 +(tg?`<div class="b" style="grid-template-columns:64px 1fr auto"><span class="l">Capaian</span><div class="t"><i style="width:${Math.min(100,tot/tg*100)}%"></i></div><span class="v">${tot}/${tg} · ${Math.round(tot/tg*100)}%${tot>=tg?' ✓ tercapai':''}</span></div>`:'')
