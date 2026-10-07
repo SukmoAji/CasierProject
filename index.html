@@ -26,21 +26,25 @@ dialog::backdrop{background:#0008}
 input,select{font:inherit;padding:10px;border:1px solid var(--line);border-radius:8px;width:100%;background:#fff;margin:4px 0}
 #ban{position:fixed;top:56px;left:12px;right:12px;z-index:5;background:var(--hot);color:#fff;padding:10px;border-radius:8px;display:flex;justify-content:space-between;align-items:center}
 .hr{width:100%;background:none;color:var(--ink);border:0;border-bottom:1px solid var(--line);border-radius:0;padding:10px 0;display:flex;justify-content:space-between;text-align:left}.vd{text-decoration:line-through;color:var(--mut)}
+label{display:block;font-size:14px;margin-top:6px}#rc{display:none}
+@media print{body>*:not(#rc){display:none!important}body{padding:0}#rc{display:block;width:58mm;font:12px/1.3 monospace;color:#000;background:#fff}@page{margin:2mm}.rr{display:flex;justify-content:space-between;gap:6px}#rc hr{border:0;border-top:1px dashed #000}}
 #login{max-width:360px;margin:15vh auto;padding:16px}
 </style></head><body>
 <div id="login" hidden><h2>Kasir Eyang</h2><input id="em" placeholder="Nama atau email" autocapitalize="none" autocomplete="username"><input id="pw" type="password" placeholder="Password"><button id="go" style="width:100%">Masuk</button><p id="err" class="disc"></p></div>
 <div id="app" hidden>
-<header><b>Kasir Eyang</b><small id="who"></small><small id="st"></small><button class="o" id="sy">Sync</button><button class="o" id="hi">Riwayat</button><button class="o" id="eb">Belanja</button><button class="o" id="lp" hidden>Laporan</button><button class="o" id="sf" hidden>Staf</button><button class="o" id="lo">Keluar</button></header>
+<header><b>Kasir Eyang</b><small id="who"></small><small id="st"></small><button class="o" id="sy">Sync</button><button class="o" id="hi">Riwayat</button><button class="o" id="eb">Belanja</button><button class="o" id="lp" hidden>Laporan</button><button class="o" id="mb" hidden>Menu</button><button class="o" id="sf" hidden>Staf</button><button class="o" id="lo">Keluar</button></header>
 <div class="tabs" id="tabs"></div><div class="grid" id="grid"></div>
 <div class="bar"><button id="cb"></button></div>
 </div>
 <div id="ban" hidden><span>Update tersedia</span><button id="upd" class="o">Muat ulang</button></div>
 <dialog id="dc"><div id="lines"></div><div id="mans"></div><div id="sum"></div>
 <select id="pm"><option value="cash">Tunai</option><option value="qris">QRIS</option><option value="other">Lainnya</option></select>
-<input id="cash" type="number" inputmode="numeric" placeholder="Uang diterima"><div id="chg"></div>
+<input id="cash" type="number" inputmode="numeric" placeholder="Uang diterima"><div id="chg"></div><label class="row"><span>Cetak struk</span><input type="checkbox" id="pc" style="width:auto"></label>
 <div style="display:flex;gap:8px;margin-top:8px"><button class="o" style="color:var(--ink)" id="cl">Tutup</button><button id="sv" style="flex:1">Simpan transaksi</button></div></dialog>
 <dialog id="de"><h3>Catat belanja</h3><select id="ec"><option value="bahan">Bahan baku</option><option value="operasional">Operasional</option><option value="lain">Lain-lain</option></select><input id="ed" placeholder="Beli apa? (mis. susu 3 liter)"><input id="ea" type="number" inputmode="numeric" placeholder="Jumlah (Rp)"><div style="display:flex;gap:8px;margin-top:8px"><button class="o" style="color:var(--ink)" id="ex0">Tutup</button><button id="es" style="flex:1">Simpan belanja</button></div></dialog>
 <dialog id="ds"><h3>Staf</h3><div id="sl"></div><input id="sn" placeholder="Nama login (huruf kecil/angka)" autocapitalize="none"><input id="sp" placeholder="Password (min. 6)"><button id="sa" style="width:100%">Tambah staf</button><p id="sm" class="disc"></p><button class="o" style="color:var(--ink);margin-top:8px" id="sc">Tutup</button></dialog>
+<dialog id="dm"><div class="tabs" id="mt"></div><div id="ml" style="max-height:28vh;overflow:auto"></div><h3 id="mh"></h3><div id="mf"></div><p id="mm" class="disc"></p><div style="display:flex;gap:8px;margin-top:8px"><button class="o" style="color:var(--ink)" id="mx">Tutup</button><button class="o" style="color:var(--ink)" id="mn">Baru</button><button id="ms" style="flex:1">Simpan</button></div></dialog>
+<div id="rc"></div>
 <dialog id="dh"><div id="hist"></div><button class="o" style="color:var(--ink);margin-top:8px" id="hc">Tutup</button></dialog>
 <script src="config.js"></script>
 <script>
@@ -85,7 +89,7 @@ async function save(){const L=[...cart.values()],ds=discounts(),s=sub(),dt=Math.
 const pay=$('#pm').value,h={id,receipt_no:p,created_at:n.toISOString(),subtotal:s,discount_total:dt,total:s-dt,payment_method:pay,cash_received:pay==='cash'?(+$('#cash').value||s-dt):null,note:null};
 const items=L.map(l=>({id:crypto.randomUUID(),transaction_id:id,menu_item_id:l.id,item_name:l.name,unit_price:l.price,qty:l.qty,line_total:l.price*l.qty}));
 const discs=ds.map(x=>({id:crypto.randomUUID(),transaction_id:id,discount_id:x.d.id,discount_name:x.d.name,transaction_item_id:null,amount:x.a,is_manual:!x.d.auto_apply}));
-await idb('tx','put',{id,h,items,discs,synced:0});cart.clear();manual.clear();$('#cash').value='';$('#dc').close();render();sync()}
+await idb('tx','put',{id,h,items,discs,synced:0});if($('#pc').checked)printRc(h,items,discs);cart.clear();manual.clear();$('#cash').value='';$('#dc').close();render();sync()}
 async function history(){const today=new Date().toLocaleDateString('sv'),T=(await idb('tx','getAll')).filter(t=>t.h.created_at&&new Date(t.h.created_at).toLocaleDateString('sv')===today).sort((a,b)=>b.h.created_at.localeCompare(a.h.created_at));
 const A=T.filter(t=>!t.h.voided_at),ow=prof.role==='owner',E=(await idb('exp','getAll')).filter(e=>new Date(e.created_at).toLocaleDateString('sv')===today).sort((a,b)=>b.created_at.localeCompare(a.created_at));
 $('#hist').innerHTML=`<h3>Hari ini: ${rp(A.reduce((a,t)=>a+t.h.total,0))} (${A.length} transaksi)</h3>${ow?'<small>Tap transaksi untuk membatalkan</small>':''}`+T.map(t=>`<button class="hr ${t.h.voided_at?'vd':''}" ${ow?`data-v="${t.id}"`:''}><span>${t.h.receipt_no.slice(-6)} · ${t.items.reduce((a,i)=>a+i.qty,0)} item${t.h.voided_at?' · BATAL':t.synced&&!t.vp?'':' · belum sync'}</span>${rp(t.h.total)}</button>`).join('')+(E.length?`<h3>Belanja: ${rp(E.reduce((a,e)=>a+e.amount,0))}</h3>`+E.map(e=>`<div class="row"><span>${esc(e.description)}${e.synced?'':' · belum sync'}</span>${rp(e.amount)}</div>`).join(''):'');
@@ -96,6 +100,8 @@ const r=prompt('Alasan batal (mis. salah input)');if(r===null)return;
 t.h.voided_at=new Date().toISOString();t.h.void_reason=r||'-';t.vp=1;await idb('tx','put',t);history();sync()}
 document.addEventListener('click',e=>{const t=e.target.closest('button,input');if(!t)return;const d=t.dataset;
 if(d.v)voidTx(d.v);
+if(d.k){K=d.k;mOpen()}
+if(d.ed!==undefined)fill(ROWS[d.ed]);
 if(d.pw){const p=prompt('Password baru (min. 6 karakter)');if(p)fn({action:'set_password',id:d.pw,password:p}).then(()=>alert('Password diubah')).catch(e=>alert(e.message))}
 if(d.act)fn({action:'set_active',id:d.act,active:d.on==='1'}).then(staffList).catch(e=>alert(e.message));
 if(d.c){cat=d.c;render()}
@@ -109,7 +115,7 @@ const esc=x=>String(x).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
 async function loadProf(force){if(force)prof=null;try{const r=await api('profiles?id=eq.'+ses.user.id);if(r[0]&&r[0].active){prof=r[0];localStorage.setItem('prof',JSON.stringify(prof))}else{prof=null;localStorage.removeItem('prof')}}catch(e){}}
 $('#go').onclick=async()=>{try{const u=$('#em').value.trim().toLowerCase();await auth({email:u.includes('@')?u:u+'@staff.eyang.id',password:$('#pw').value},'password');await loadProf(true);if(!prof)throw new Error('Akun belum terdaftar atau tidak aktif');const old=localStorage.getItem('uid');if(old&&old!==ses.user.id){await idb('tx','clear');await idb('exp','clear')}localStorage.setItem('uid',ses.user.id);start()}catch(e){$('#err').textContent=e.message}};
 async function start(){if(ses&&navigator.onLine)await loadProf();if(ses&&!prof){localStorage.removeItem('ses');ses=null}
-$('#login').hidden=!!ses;$('#app').hidden=!ses;if(!ses)return;$('#who').textContent=prof.name;$('#lp').hidden=$('#sf').hidden=prof.role!=='owner';await load();sync()}
+$('#login').hidden=!!ses;$('#app').hidden=!ses;if(!ses)return;$('#who').textContent=prof.name;$('#lp').hidden=$('#sf').hidden=$('#mb').hidden=prof.role!=='owner';await load();sync()}
 $('#eb').onclick=()=>{$('#ed').value=$('#ea').value='';$('#de').showModal()};$('#ex0').onclick=()=>$('#de').close();
 $('#es').onclick=async()=>{const a=Math.round(+$('#ea').value),d=$('#ed').value.trim();if(!d||!(a>0))return alert('Isi keterangan dan jumlah');await idb('exp','put',{id:crypto.randomUUID(),created_at:new Date().toISOString(),category:$('#ec').value,description:d,amount:a,synced:0});$('#de').close();sync()};
 $('#lo').onclick=async()=>{if(!confirm('Keluar dari akun ini?'))return;try{await push()}catch(e){return alert('Masih ada data belum tersinkron. Online dulu, lalu coba lagi.')}['ses','prof','uid'].forEach(k=>localStorage.removeItem(k));await idb('tx','clear');await idb('exp','clear');location.reload()};
@@ -117,6 +123,30 @@ async function fn(body){if(Date.now()>ses.exp-60000)await auth({refresh_token:se
 async function staffList(){try{const L=await api('profiles?role=eq.staff&order=name');$('#sl').innerHTML=L.map(x=>`<div class="row"><span>${esc(x.name)}${x.active?'':' (nonaktif)'}</span><span><button data-pw="${x.id}">Password</button> <button data-act="${x.id}" data-on="${x.active?0:1}">${x.active?'Nonaktifkan':'Aktifkan'}</button></span></div>`).join('')||'<p>Belum ada staf.</p>'}catch(e){$('#sl').textContent='Gagal memuat (online?)'}}
 $('#sa').onclick=async()=>{$('#sm').textContent='';try{await fn({action:'create',name:$('#sn').value.trim().toLowerCase(),password:$('#sp').value});$('#sn').value=$('#sp').value='';staffList()}catch(e){$('#sm').textContent=e.message}};
 $('#sf').onclick=()=>{staffList();$('#ds').showModal()};$('#sc').onclick=()=>$('#ds').close();
+// ---- Struk (cetak lewat dialog print browser / RawBT)
+const PM2={cash:'Tunai',qris:'QRIS',other:'Lainnya'};$('#pc').checked=localStorage.pc==='1';$('#pc').onchange=()=>localStorage.pc=$('#pc').checked?1:0;
+function printRc(h,items,discs){const n=new Date(h.created_at),R=(a,b)=>`<div class="rr"><span>${a}</span><span>${b}</span></div>`,pay=h.cash_received||h.total;
+$('#rc').innerHTML=`<b>Kedai Kopi Eyang</b><br>${n.toLocaleDateString('id-ID')} ${n.toTimeString().slice(0,5)}<br>${h.receipt_no} · ${esc(prof.name)}<hr>`+items.map(i=>`${esc(i.item_name)}${R(i.qty+' x '+rp(i.unit_price),rp(i.line_total))}`).join('')+'<hr>'+R('Subtotal',rp(h.subtotal))+discs.map(d=>R(esc(d.discount_name),'-'+rp(d.amount))).join('')+R('<b>TOTAL</b>','<b>'+rp(h.total)+'</b>')+R(PM2[h.payment_method],rp(pay))+(h.payment_method==='cash'?R('Kembali',rp(pay-h.total)):'')+'<hr><center>Terima kasih!</center>';setTimeout(()=>print(),200)}
+// ---- Kelola menu & diskon (owner)
+let K='menu',ED=null,ROWS=[];
+const F={menu:{t:'menu_items',f:[['name','Nama','text'],['category','Kategori','text'],['price','Harga (Rp)','number'],['is_active','Aktif','check']]},
+disc:{t:'discounts',f:[['name','Nama','text'],['type','Tipe','select:percent,amount,buy_x_get_y'],['value','Nilai (% atau Rp)','number'],['buy_qty','Beli (qty)','number'],['free_qty','Gratis (qty)','number'],['min_qty','Min. qty','number'],['scope','Berlaku untuk','select:order,category,item'],['scope_category','Kategori (jika scope = category)','text'],['scope_item_id','Menu (jika scope = item)','menu'],['start_time','Jam mulai','time'],['end_time','Jam selesai','time'],['valid_from','Berlaku dari','date'],['valid_until','Sampai tanggal','date'],['auto_apply','Otomatis diterapkan','check'],['stackable','Boleh digabung','check'],['priority','Prioritas','number'],['is_active','Aktif','check']]}};
+function formHTML(){return F[K].f.map(([k,l,t])=>{const id='f_'+k;
+if(t==='check')return`<label class="row"><span>${l}</span><input type="checkbox" id="${id}" style="width:auto"></label>`;
+if(t.startsWith('select:'))return`<label>${l}<select id="${id}">${t.slice(7).split(',').map(o=>`<option>${o}</option>`).join('')}</select></label>`;
+if(t==='menu')return`<label>${l}<select id="${id}"><option value="">-</option>${M.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select></label>`;
+return`<label>${l}<input id="${id}" type="${t}" ${t==='number'?'inputmode="decimal"':''}></label>`}).join('')}
+function fill(r){ED=r&&r.id||null;$('#mm').textContent='';$('#mh').textContent=r?'Ubah: '+r.name:'Tambah baru';
+F[K].f.forEach(([k,,t])=>{const e=$('#f_'+k),v=r?r[k]:(k==='is_active'||k==='auto_apply'?true:k==='priority'?0:'');if(t==='check')e.checked=!!v;else{e.value=v==null?'':v;if(e.tagName==='SELECT'&&e.selectedIndex<0)e.selectedIndex=0}})}
+function collect(){const o={};for(const[k,,t]of F[K].f){const e=$('#f_'+k);o[k]=t==='check'?e.checked:t==='number'?(e.value===''?null:Number(e.value)):(e.value.trim()||null)}return o}
+async function mList(){try{ROWS=await api(F[K].t+'?order=name');$('#ml').innerHTML=ROWS.map((r,i)=>`<button class="hr ${r.is_active?'':'vd'}" data-ed="${i}"><span>${esc(r.name)}${K==='menu'?' · '+esc(r.category):''}</span>${K==='menu'?rp(r.price):esc(r.type)}</button>`).join('')||'<p>Belum ada data.</p>'}catch(e){$('#ml').textContent='Gagal memuat (online?)'}}
+function mOpen(){$('#mt').innerHTML=`<button data-k="menu" class="${K==='menu'?'on':''}">Menu</button><button data-k="disc" class="${K==='disc'?'on':''}">Diskon</button>`;$('#mf').innerHTML=formHTML();fill(null);mList();if(!$('#dm').open)$('#dm').showModal()}
+async function mSave(){try{const o=collect();if(!o.name)throw new Error('Nama wajib diisi');
+if(K==='menu'){if(!o.category||o.price==null)throw new Error('Kategori dan harga wajib diisi');o.price=Math.round(o.price)}
+else{['value','buy_qty','free_qty','min_qty','priority'].forEach(k=>o[k]!=null&&(o[k]=Math.round(o[k])));o.priority=o.priority||0;if(o.type==='buy_x_get_y'){if(!o.buy_qty||!o.free_qty)throw new Error('Isi Beli dan Gratis (qty)');o.value=null}else if(!o.value)throw new Error('Isi Nilai diskon')}
+await api(F[K].t+(ED?'?id=eq.'+ED:''),{method:ED?'PATCH':'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify(o)});
+await mList();fill(null);$('#mm').textContent='Tersimpan';sync()}catch(e){$('#mm').textContent=e.message}}
+$('#mb').onclick=mOpen;$('#mx').onclick=()=>$('#dm').close();$('#mn').onclick=()=>fill(null);$('#ms').onclick=mSave;
 addEventListener('online',sync);start();
 // ---- PWA update
 if('serviceWorker'in navigator){navigator.serviceWorker.register('sw.js').then(r=>{const w=()=>r.waiting&&navigator.serviceWorker.controller&&($('#ban').hidden=false);w();r.addEventListener('updatefound',()=>r.installing.addEventListener('statechange',w));$('#upd').onclick=()=>r.waiting.postMessage('SKIP_WAITING')});

@@ -1,5 +1,5 @@
 // NAIKKAN versi ini setiap rilis supaya device mengenali update
-const V = 'kasir-v6';
+const V = 'kasir-v7';
 const FILES = ['./', 'index.html', 'dashboard.html', 'config.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 self.addEventListener('install', e => e.waitUntil(caches.open(V).then(c => c.addAll(FILES))));
 self.addEventListener('activate', e => e.waitUntil(
