@@ -25,6 +25,7 @@ dialog::backdrop{background:#0008}
 .disc{color:var(--hot)}.tot{font-size:20px;font-weight:700}
 input,select{font:inherit;padding:10px;border:1px solid var(--line);border-radius:8px;width:100%;background:#fff;margin:4px 0}
 #ban{position:fixed;top:56px;left:12px;right:12px;z-index:5;background:var(--hot);color:#fff;padding:10px;border-radius:8px;display:flex;justify-content:space-between;align-items:center}
+.hr{width:100%;background:none;color:var(--ink);border:0;border-bottom:1px solid var(--line);border-radius:0;padding:10px 0;display:flex;justify-content:space-between;text-align:left}.vd{text-decoration:line-through;color:var(--mut)}
 #login{max-width:360px;margin:15vh auto;padding:16px}
 </style></head><body>
 <div id="login" hidden><h2>Kasir Eyang</h2><input id="em" type="email" placeholder="Email"><input id="pw" type="password" placeholder="Password"><button id="go" style="width:100%">Masuk</button><p id="err" class="disc"></p></div>
@@ -51,7 +52,8 @@ async function auth(body,grant){const r=await fetch(`${C.URL}/auth/v1/token?gran
 async function api(path,opt={}){if(Date.now()>ses.exp-60000)await auth({refresh_token:ses.refresh_token},'refresh_token');const r=await fetch(`${C.URL}/rest/v1/${path}`,{...opt,headers:{apikey:C.KEY,Authorization:'Bearer '+ses.access_token,'Content-Type':'application/json',...opt.headers}});const t=await r.text();if(!r.ok)throw new Error(t);return t?JSON.parse(t):null}
 async function pull(){const since=encodeURIComponent(new Date(Date.now()-14*864e5).toISOString());const[m,d,T]=await Promise.all([api('menu_items?is_active=eq.true&order=category,name'),api('discounts?is_active=eq.true'),api('transactions?select=*,transaction_items(*),transaction_discounts(*)&created_at=gte.'+since)]);await idb('menu','clear');await idb('discounts','clear');for(const x of m)await idb('menu','put',x);for(const x of d)await idb('discounts','put',x);for(const{transaction_items:items,transaction_discounts:discs,...h}of T)await idb('tx','put',{id:h.id,h,items,discs,synced:1})}
 async function push(){const h={Prefer:'resolution=ignore-duplicates,return=minimal'},p=(t,b)=>b.length&&api(t+'?on_conflict=id',{method:'POST',headers:h,body:JSON.stringify(b)});
-for(const t of(await idb('tx','getAll')).filter(t=>!t.synced)){await p('transactions',[t.h]);await p('transaction_items',t.items);await p('transaction_discounts',t.discs);t.synced=1;await idb('tx','put',t)}}
+for(const t of(await idb('tx','getAll')).filter(t=>!t.synced)){await p('transactions',[t.h]);await p('transaction_items',t.items);await p('transaction_discounts',t.discs);t.synced=1;await idb('tx','put',t)}
+for(const t of(await idb('tx','getAll')).filter(t=>t.vp)){await api('transactions?id=eq.'+t.id,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({voided_at:t.h.voided_at,void_reason:t.h.void_reason})});t.vp=0;await idb('tx','put',t)}}
 async function sync(){if(!ses)return;$('#st').textContent='Sync...';try{await push();await pull();await load();$('#st').textContent='Tersinkron'}catch(e){console.error(e);$('#st').textContent=navigator.onLine?'Sync gagal':'Offline'}}
 async function load(){M=await idb('menu','getAll');D=await idb('discounts','getAll');render()}
 // ---- Diskon
@@ -82,8 +84,14 @@ const items=L.map(l=>({id:crypto.randomUUID(),transaction_id:id,menu_item_id:l.i
 const discs=ds.map(x=>({id:crypto.randomUUID(),transaction_id:id,discount_id:x.d.id,discount_name:x.d.name,transaction_item_id:null,amount:x.a,is_manual:!x.d.auto_apply}));
 await idb('tx','put',{id,h,items,discs,synced:0});cart.clear();manual.clear();$('#cash').value='';$('#dc').close();render();sync()}
 async function history(){const today=new Date().toLocaleDateString('sv'),T=(await idb('tx','getAll')).filter(t=>t.h.created_at&&new Date(t.h.created_at).toLocaleDateString('sv')===today).sort((a,b)=>b.h.created_at.localeCompare(a.h.created_at));
-$('#hist').innerHTML=`<h3>Hari ini: ${rp(T.reduce((a,t)=>a+t.h.total,0))} (${T.length} transaksi)</h3>`+T.map(t=>`<div class="row"><span>${t.h.receipt_no.slice(-6)} · ${t.items.reduce((a,i)=>a+i.qty,0)} item${t.synced?'':' · belum sync'}</span>${rp(t.h.total)}</div>`).join('');$('#dh').showModal()}
+const A=T.filter(t=>!t.h.voided_at);
+$('#hist').innerHTML=`<h3>Hari ini: ${rp(A.reduce((a,t)=>a+t.h.total,0))} (${A.length} transaksi)</h3><small>Tap transaksi untuk membatalkan</small>`+T.map(t=>`<button class="hr ${t.h.voided_at?'vd':''}" data-v="${t.id}"><span>${t.h.receipt_no.slice(-6)} · ${t.items.reduce((a,i)=>a+i.qty,0)} item${t.h.voided_at?' · BATAL':t.synced&&!t.vp?'':' · belum sync'}</span>${rp(t.h.total)}</button>`).join('');if(!$('#dh').open)$('#dh').showModal()}
+async function voidTx(id){const t=await idb('tx','get',id);if(t.h.voided_at)return;
+if(!confirm(`Batalkan ${t.h.receipt_no.slice(-6)}?\n${t.items.map(i=>i.qty+'x '+i.item_name).join(', ')}\nTotal ${rp(t.h.total)}`))return;
+const r=prompt('Alasan batal (mis. salah input)');if(r===null)return;
+t.h.voided_at=new Date().toISOString();t.h.void_reason=r||'-';t.vp=1;await idb('tx','put',t);history();sync()}
 document.addEventListener('click',e=>{const t=e.target.closest('button,input');if(!t)return;const d=t.dataset;
+if(d.v)voidTx(d.v);
 if(d.c){cat=d.c;render()}
 if(d.i){const m=M.find(x=>x.id===d.i),l=cart.get(m.id);l?l.qty++:cart.set(m.id,{id:m.id,name:m.name,category:m.category,price:m.price,qty:1});render()}
 if(d.p||d.m){const l=cart.get(d.p||d.m);l.qty+=d.p?1:-1;if(l.qty<1)cart.delete(l.id);render();cartUI()}
