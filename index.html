@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="id"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#1f3d33">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Kasir Eyang</title>
+<style>
+:root{--bg:#f2f3ee;--ink:#1c1a17;--g:#1f3d33;--mut:#6b6f68;--line:#d9dbd2;--hot:#b4430f}
+*{box-sizing:border-box}body{margin:0;font:16px/1.4 system-ui,sans-serif;background:var(--bg);color:var(--ink);padding-bottom:72px}
+[hidden]{display:none!important}
+header{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--g);color:#fff;position:sticky;top:0;z-index:2}
+header b{flex:1;font-size:18px}header small{opacity:.8}
+button{font:inherit;border:0;border-radius:8px;padding:10px 14px;background:var(--g);color:#fff}
+button.o{background:transparent;color:inherit;border:1px solid currentColor}
+.tabs{display:flex;gap:6px;overflow-x:auto;padding:10px 12px}.tabs button{background:#fff;color:var(--ink);border:1px solid var(--line);white-space:nowrap}
+.tabs button.on{background:var(--g);color:#fff}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;padding:0 12px}
+.card{background:#fff;border:1px solid var(--line);color:var(--ink);text-align:left;min-height:84px;display:flex;flex-direction:column;justify-content:space-between}
+.card span{color:var(--mut);font-size:14px}
+.bar{position:fixed;left:0;right:0;bottom:0;padding:10px 12px;background:#fff;border-top:1px solid var(--line)}.bar button{width:100%;padding:14px}
+dialog{width:min(560px,100%);max-height:92vh;border:0;border-radius:12px;padding:16px;background:var(--bg);color:var(--ink)}
+dialog::backdrop{background:#0008}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)}
+.q{display:flex;align-items:center;gap:8px}.q button{padding:4px 12px;background:#fff;color:var(--ink);border:1px solid var(--line)}
+.disc{color:var(--hot)}.tot{font-size:20px;font-weight:700}
+input,select{font:inherit;padding:10px;border:1px solid var(--line);border-radius:8px;width:100%;background:#fff;margin:4px 0}
+#ban{position:fixed;top:56px;left:12px;right:12px;z-index:5;background:var(--hot);color:#fff;padding:10px;border-radius:8px;display:flex;justify-content:space-between;align-items:center}
+#login{max-width:360px;margin:15vh auto;padding:16px}
+</style></head><body>
+<div id="login" hidden><h2>Kasir Eyang</h2><input id="em" type="email" placeholder="Email"><input id="pw" type="password" placeholder="Password"><button id="go" style="width:100%">Masuk</button><p id="err" class="disc"></p></div>
+<div id="app" hidden>
+<header><b>Kasir Eyang</b><small id="st"></small><button class="o" id="sy">Sync</button><button class="o" id="hi">Riwayat</button></header>
+<div class="tabs" id="tabs"></div><div class="grid" id="grid"></div>
+<div class="bar"><button id="cb"></button></div>
+</div>
+<div id="ban" hidden><span>Update tersedia</span><button id="upd" class="o">Muat ulang</button></div>
+<dialog id="dc"><div id="lines"></div><div id="mans"></div><div id="sum"></div>
+<select id="pm"><option value="cash">Tunai</option><option value="qris">QRIS</option><option value="other">Lainnya</option></select>
+<input id="cash" type="number" inputmode="numeric" placeholder="Uang diterima"><div id="chg"></div>
+<div style="display:flex;gap:8px;margin-top:8px"><button class="o" style="color:var(--ink)" id="cl">Tutup</button><button id="sv" style="flex:1">Simpan transaksi</button></div></dialog>
+<dialog id="dh"><div id="hist"></div><button class="o" style="color:var(--ink);margin-top:8px" id="hc">Tutup</button></dialog>
+<script src="config.js"></script>
+<script>
+const C=CONFIG,$=s=>document.querySelector(s),rp=n=>'Rp'+Math.round(n).toLocaleString('id-ID');
+let M=[],D=[],cat='Semua',cart=new Map(),manual=new Set(),ses=JSON.parse(localStorage.getItem('ses')||'null');
+// ---- IndexedDB
+const db=new Promise((ok,no)=>{const r=indexedDB.open('kasir',1);r.onupgradeneeded=()=>['menu','discounts','tx'].forEach(s=>r.result.createObjectStore(s,{keyPath:'id'}));r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)});
+const idb=async(s,m,...a)=>{const d=await db;return new Promise((ok,no)=>{const q=d.transaction(s,/get/.test(m)?'readonly':'readwrite').objectStore(s)[m](...a);q.onsuccess=()=>ok(q.result);q.onerror=()=>no(q.error)})};
+// ---- Supabase (REST, tanpa library)
+async function auth(body,grant){const r=await fetch(`${C.URL}/auth/v1/token?grant_type=${grant}`,{method:'POST',headers:{apikey:C.KEY,'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await r.json();if(!r.ok)throw new Error(j.error_description||j.msg||'Login gagal');ses={...j,exp:Date.now()+j.expires_in*1000};localStorage.setItem('ses',JSON.stringify(ses))}
+async function api(path,opt={}){if(Date.now()>ses.exp-60000)await auth({refresh_token:ses.refresh_token},'refresh_token');const r=await fetch(`${C.URL}/rest/v1/${path}`,{...opt,headers:{apikey:C.KEY,Authorization:'Bearer '+ses.access_token,'Content-Type':'application/json',...opt.headers}});const t=await r.text();if(!r.ok)throw new Error(t);return t?JSON.parse(t):null}
+async function pull(){const[m,d]=await Promise.all([api('menu_items?is_active=eq.true&order=category,name'),api('discounts?is_active=eq.true')]);await idb('menu','clear');await idb('discounts','clear');for(const x of m)await idb('menu','put',x);for(const x of d)await idb('discounts','put',x)}
+async function push(){const h={Prefer:'resolution=ignore-duplicates,return=minimal'},p=(t,b)=>b.length&&api(t+'?on_conflict=id',{method:'POST',headers:h,body:JSON.stringify(b)});
+for(const t of(await idb('tx','getAll')).filter(t=>!t.synced)){await p('transactions',[t.h]);await p('transaction_items',t.items);await p('transaction_discounts',t.discs);t.synced=1;await idb('tx','put',t)}}
+async function sync(){if(!ses)return;$('#st').textContent='Sync...';try{await push();await pull();await load();$('#st').textContent='Tersinkron'}catch(e){console.error(e);$('#st').textContent=navigator.onLine?'Sync gagal':'Offline'}}
+async function load(){M=await idb('menu','getAll');D=await idb('discounts','getAll');render()}
+// ---- Diskon
+function ok(d,n=new Date()){const t=n.toLocaleDateString('sv'),hm=n.toTimeString().slice(0,8);
+if(d.valid_from&&t<d.valid_from||d.valid_until&&t>d.valid_until)return false;
+if(d.days_of_week&&!d.days_of_week.includes(n.getDay()))return false;
+if(d.start_time&&hm<d.start_time||d.end_time&&hm>=d.end_time)return false;return true}
+function calc(d,L){const m=L.filter(l=>d.scope==='order'||d.scope==='category'&&l.category===d.scope_category||d.scope==='item'&&l.id===d.scope_item_id);
+const q=m.reduce((a,l)=>a+l.qty,0),s=m.reduce((a,l)=>a+l.qty*l.price,0);if(!q||q<(d.min_qty||0))return 0;
+if(d.type==='percent')return Math.round(s*d.value/100);if(d.type==='amount')return Math.min(d.value,s);
+if(d.type==='buy_x_get_y'){const g=d.buy_qty+d.free_qty;return m.reduce((a,l)=>a+Math.floor(l.qty/g)*d.free_qty*l.price,0)}return 0}
+function discounts(){const L=[...cart.values()],c=D.filter(d=>ok(d)&&(d.auto_apply||manual.has(d.id))).map(d=>({d,a:calc(d,L)})).filter(x=>x.a>0);
+const ns=c.filter(x=>!x.d.stackable).sort((a,b)=>b.a-a.a||b.d.priority-a.d.priority);return[...ns.slice(0,1),...c.filter(x=>x.d.stackable)]}
+const sub=()=>[...cart.values()].reduce((a,l)=>a+l.qty*l.price,0),qty=()=>[...cart.values()].reduce((a,l)=>a+l.qty,0);
+// ---- UI
+function render(){const cats=['Semua',...new Set(M.map(m=>m.category))];
+$('#tabs').innerHTML=cats.map(c=>`<button class="${c===cat?'on':''}" data-c="${c}">${c}</button>`).join('');
+$('#grid').innerHTML=M.filter(m=>cat==='Semua'||m.category===cat).map(m=>`<button class="card" data-i="${m.id}">${m.name}<span>${rp(m.price)}</span></button>`).join('')||'<p style="grid-column:1/-1">Menu kosong. Isi tabel menu_items di Supabase lalu tekan Sync.</p>';
+const dt=Math.min(sub(),discounts().reduce((a,x)=>a+x.a,0));$('#cb').textContent=qty()?`Keranjang (${qty()}) · ${rp(sub()-dt)}`:'Keranjang kosong'}
+function cartUI(){const ds=discounts(),dt=Math.min(sub(),ds.reduce((a,x)=>a+x.a,0)),tot=sub()-dt;
+$('#lines').innerHTML=[...cart.values()].map(l=>`<div class="row"><div>${l.name}<br><small>${rp(l.price)}</small></div><div class="q"><button data-m="${l.id}">−</button>${l.qty}<button data-p="${l.id}">+</button></div></div>`).join('');
+$('#mans').innerHTML=D.filter(d=>!d.auto_apply&&ok(d)).map(d=>`<label class="row"><span>${d.name}</span><input type="checkbox" style="width:auto" data-d="${d.id}" ${manual.has(d.id)?'checked':''}></label>`).join('');
+$('#sum').innerHTML=`<div class="row"><span>Subtotal</span>${rp(sub())}</div>`+ds.map(x=>`<div class="row disc"><span>${x.d.name}</span>−${rp(x.a)}</div>`).join('')+`<div class="row tot"><span>Total</span>${rp(tot)}</div>`;
+const c=+$('#cash').value||0;$('#chg').textContent=$('#pm').value==='cash'&&c?(c>=tot?'Kembalian '+rp(c-tot):'Uang kurang'):'';$('#cash').hidden=$('#pm').value!=='cash';$('#sv').disabled=!cart.size}
+async function save(){const L=[...cart.values()],ds=discounts(),s=sub(),dt=Math.min(s,ds.reduce((a,x)=>a+x.a,0)),id=crypto.randomUUID(),n=new Date(),p=n.toLocaleDateString('sv').replace(/-/g,'')+'-'+n.toTimeString().slice(0,8).replace(/:/g,'');
+const pay=$('#pm').value,h={id,receipt_no:p,created_at:n.toISOString(),subtotal:s,discount_total:dt,total:s-dt,payment_method:pay,cash_received:pay==='cash'?(+$('#cash').value||s-dt):null,note:null};
+const items=L.map(l=>({id:crypto.randomUUID(),transaction_id:id,menu_item_id:l.id,item_name:l.name,unit_price:l.price,qty:l.qty,line_total:l.price*l.qty}));
+const discs=ds.map(x=>({id:crypto.randomUUID(),transaction_id:id,discount_id:x.d.id,discount_name:x.d.name,transaction_item_id:null,amount:x.a,is_manual:!x.d.auto_apply}));
+await idb('tx','put',{id,h,items,discs,synced:0});cart.clear();manual.clear();$('#cash').value='';$('#dc').close();render();sync()}
+async function history(){const today=new Date().toLocaleDateString('sv'),T=(await idb('tx','getAll')).filter(t=>t.h.created_at&&new Date(t.h.created_at).toLocaleDateString('sv')===today).sort((a,b)=>b.h.created_at.localeCompare(a.h.created_at));
+$('#hist').innerHTML=`<h3>Hari ini: ${rp(T.reduce((a,t)=>a+t.h.total,0))} (${T.length} transaksi)</h3>`+T.map(t=>`<div class="row"><span>${t.h.receipt_no.slice(-6)} · ${t.items.reduce((a,i)=>a+i.qty,0)} item${t.synced?'':' · belum sync'}</span>${rp(t.h.total)}</div>`).join('');$('#dh').showModal()}
+document.addEventListener('click',e=>{const t=e.target.closest('button,input');if(!t)return;const d=t.dataset;
+if(d.c){cat=d.c;render()}
+if(d.i){const m=M.find(x=>x.id===d.i),l=cart.get(m.id);l?l.qty++:cart.set(m.id,{id:m.id,name:m.name,category:m.category,price:m.price,qty:1});render()}
+if(d.p||d.m){const l=cart.get(d.p||d.m);l.qty+=d.p?1:-1;if(l.qty<1)cart.delete(l.id);render();cartUI()}
+if(d.d){t.checked?manual.add(d.d):manual.delete(d.d);cartUI();render()}});
+$('#cb').onclick=()=>{if(qty()){cartUI();$('#dc').showModal()}};$('#cl').onclick=()=>$('#dc').close();$('#hc').onclick=()=>$('#dh').close();
+$('#pm').onchange=$('#cash').oninput=cartUI;$('#sv').onclick=save;$('#sy').onclick=sync;$('#hi').onclick=history;
+$('#go').onclick=async()=>{try{await auth({email:$('#em').value,password:$('#pw').value},'password');start()}catch(e){$('#err').textContent=e.message}};
+async function start(){$('#login').hidden=!!ses;$('#app').hidden=!ses;if(!ses)return;await load();sync()}
+addEventListener('online',sync);start();
+// ---- PWA update
+if('serviceWorker'in navigator){navigator.serviceWorker.register('sw.js').then(r=>{const w=()=>r.waiting&&navigator.serviceWorker.controller&&($('#ban').hidden=false);w();r.addEventListener('updatefound',()=>r.installing.addEventListener('statechange',w));$('#upd').onclick=()=>r.waiting.postMessage('SKIP_WAITING')});
+navigator.serviceWorker.addEventListener('controllerchange',()=>location.reload())}
+</script></body></html>
