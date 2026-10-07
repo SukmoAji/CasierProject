@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="id"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#1f3d33">
+<title>Laporan Kasir Eyang</title>
+<style>
+:root{--bg:#f2f3ee;--ink:#1c1a17;--g:#1f3d33;--mut:#6b6f68;--line:#d9dbd2;--hot:#b4430f}
+*{box-sizing:border-box}body{margin:0;font:16px/1.4 system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+header{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--g);color:#fff;position:sticky;top:0}
+header a{color:#fff}header b{flex:1}
+main{max-width:720px;margin:0 auto;padding:12px}
+select{font:inherit;padding:10px;border:1px solid var(--line);border-radius:8px;width:100%;background:#fff}
+.k{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}
+.k div{background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px}
+.k small{color:var(--mut)}.k b{display:block;font-size:20px}
+h3{margin:20px 0 6px}
+.b{display:grid;grid-template-columns:64px 1fr auto;gap:8px;align-items:center;padding:4px 0;font-size:14px}
+.b .t{background:#e4e6dd;height:14px;border-radius:3px;overflow:hidden}.b i{display:block;height:100%;background:var(--g)}
+.b .v{text-align:right;color:var(--mut);white-space:nowrap}
+.tp .b{grid-template-columns:minmax(90px,1.2fr) 1fr auto}.tp .l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mut{color:var(--mut);font-size:14px}.err{color:var(--hot)}
+</style></head><body>
+<header><a href="index.html">← Kasir</a><b>Laporan</b><small id="st"></small></header>
+<main>
+<select id="pr"><option value="today">Hari ini</option><option value="7">7 hari terakhir</option><option value="30">30 hari terakhir</option><option value="month">Bulan ini</option><option value="last">Bulan lalu</option></select>
+<div id="out"></div>
+</main>
+<script src="config.js"></script>
+<script>
+const C=CONFIG,$=s=>document.querySelector(s),rp=n=>'Rp'+Math.round(n).toLocaleString('id-ID');
+let ses=JSON.parse(localStorage.getItem('ses')||'null');if(!ses)location.href='index.html';
+async function api(path){if(Date.now()>ses.exp-60000){const r=await fetch(`${C.URL}/auth/v1/token?grant_type=refresh_token`,{method:'POST',headers:{apikey:C.KEY,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:ses.refresh_token})});const j=await r.json();if(!r.ok){location.href='index.html';return}ses={...j,exp:Date.now()+j.expires_in*1000};localStorage.setItem('ses',JSON.stringify(ses))}
+const r=await fetch(`${C.URL}/rest/v1/${path}`,{headers:{apikey:C.KEY,Authorization:'Bearer '+ses.access_token}});if(!r.ok)throw new Error(await r.text());return r.json()}
+const rg=p=>{const n=new Date(),y=n.getFullYear(),m=n.getMonth(),t=n.getDate(),d=(a,b,c)=>new Date(a,b,c);
+return p==='today'?[d(y,m,t),d(y,m,t+1)]:p==='7'?[d(y,m,t-6),d(y,m,t+1)]:p==='30'?[d(y,m,t-29),d(y,m,t+1)]:p==='month'?[d(y,m,1),d(y,m+1,1)]:[d(y,m-1,1),d(y,m,1)]};
+async function fetchAll(p){const[a,b]=rg(p);let all=[],o=0;for(;;){const r=await api(`transactions?select=id,created_at,total,discount_total,payment_method,voided_at,transaction_items(item_name,qty,line_total)&created_at=gte.${encodeURIComponent(a.toISOString())}&created_at=lt.${encodeURIComponent(b.toISOString())}&order=created_at&limit=1000&offset=${o}`);all=all.concat(r);if(r.length<1000)break;o+=1000}return all}
+const sum=(a,f)=>a.reduce((s,x)=>s+f(x),0),grp=(a,k)=>a.reduce((m,x)=>{(m[k(x)]=m[k(x)]||[]).push(x);return m},{});
+const bars=rows=>{const mx=Math.max(...rows.map(r=>r[1]),1);return rows.map(([l,v,t])=>`<div class="b"><span class="l">${l}</span><div class="t"><i style="width:${v/mx*100}%"></i></div><span class="v">${t}</span></div>`).join('')};
+const PM={cash:'Tunai',qris:'QRIS',other:'Lainnya'};
+async function load(){$('#st').textContent='Memuat...';try{
+const all=await fetchAll($('#pr').value),ok=all.filter(t=>!t.voided_at),vd=all.length-ok.length;
+if(!ok.length){$('#out').innerHTML='<p class="mut">Belum ada transaksi di periode ini.</p>';$('#st').textContent='';return}
+const om=sum(ok,t=>t.total);
+let h=`<div class="k"><div><small>Omzet</small><b>${rp(om)}</b></div><div><small>Transaksi</small><b>${ok.length}</b></div><div><small>Rata-rata/transaksi</small><b>${rp(om/ok.length)}</b></div><div><small>Total diskon</small><b>${rp(sum(ok,t=>t.discount_total))}</b></div></div>`;
+if(vd)h+=`<p class="mut">${vd} transaksi dibatalkan (tidak dihitung)</p>`;
+const pg=grp(ok,t=>t.payment_method);h+='<h3>Metode bayar</h3>'+bars(Object.entries(pg).map(([k,a])=>[PM[k]||k,sum(a,t=>t.total),`${rp(sum(a,t=>t.total))} · ${a.length}x`]));
+const dg=grp(ok,t=>new Date(t.created_at).toLocaleDateString('sv'));if(Object.keys(dg).length>1)h+='<h3>Per hari</h3>'+bars(Object.keys(dg).sort().map(k=>[k.slice(5),sum(dg[k],t=>t.total),`${rp(sum(dg[k],t=>t.total))} · ${dg[k].length}x`]));
+const hg=grp(ok,t=>new Date(t.created_at).getHours()),hs=Object.keys(hg).map(Number),r=[];for(let i=Math.min(...hs);i<=Math.max(...hs);i++){const a=hg[i]||[];r.push([i+':00',sum(a,t=>t.total),`${rp(sum(a,t=>t.total))} · ${a.length}x`])}
+h+='<h3>Jam ramai</h3>'+bars(r);
+const im={};ok.forEach(t=>(t.transaction_items||[]).forEach(i=>{const x=im[i.item_name]=im[i.item_name]||{q:0,o:0};x.q+=i.qty;x.o+=i.line_total}));
+h+='<h3>Menu terlaris</h3><div class="tp">'+bars(Object.entries(im).sort((a,b)=>b[1].q-a[1].q).slice(0,10).map(([n,x])=>[n,x.q,`${x.q}x · ${rp(x.o)}`]))+'</div>';
+$('#out').innerHTML=h;$('#st').textContent=''}catch(e){console.error(e);$('#out').innerHTML='<p class="err">Gagal memuat. Pastikan online, lalu pilih periode lagi.</p>';$('#st').textContent=''}}
+$('#pr').onchange=load;load();
+</script></body></html>

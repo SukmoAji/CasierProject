@@ -9,7 +9,7 @@
 *{box-sizing:border-box}body{margin:0;font:16px/1.4 system-ui,sans-serif;background:var(--bg);color:var(--ink);padding-bottom:72px}
 [hidden]{display:none!important}
 header{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--g);color:#fff;position:sticky;top:0;z-index:2}
-header b{flex:1;font-size:18px}header small{opacity:.8}
+header b{flex:1;font-size:18px}header button{padding:8px 10px;font-size:14px}header small{opacity:.8}
 button{font:inherit;border:0;border-radius:8px;padding:10px 14px;background:var(--g);color:#fff}
 button.o{background:transparent;color:inherit;border:1px solid currentColor}
 .tabs{display:flex;gap:6px;overflow-x:auto;padding:10px 12px}.tabs button{background:#fff;color:var(--ink);border:1px solid var(--line);white-space:nowrap}
@@ -30,7 +30,7 @@ input,select{font:inherit;padding:10px;border:1px solid var(--line);border-radiu
 </style></head><body>
 <div id="login" hidden><h2>Kasir Eyang</h2><input id="em" type="email" placeholder="Email"><input id="pw" type="password" placeholder="Password"><button id="go" style="width:100%">Masuk</button><p id="err" class="disc"></p></div>
 <div id="app" hidden>
-<header><b>Kasir Eyang</b><small id="st"></small><button class="o" id="sy">Sync</button><button class="o" id="hi">Riwayat</button></header>
+<header><b>Kasir Eyang</b><small id="st"></small><button class="o" id="sy">Sync</button><button class="o" id="hi">Riwayat</button><button class="o" id="lp">Laporan</button></header>
 <div class="tabs" id="tabs"></div><div class="grid" id="grid"></div>
 <div class="bar"><button id="cb"></button></div>
 </div>
@@ -97,7 +97,7 @@ if(d.i){const m=M.find(x=>x.id===d.i),l=cart.get(m.id);l?l.qty++:cart.set(m.id,{
 if(d.p||d.m){const l=cart.get(d.p||d.m);l.qty+=d.p?1:-1;if(l.qty<1)cart.delete(l.id);render();cartUI()}
 if(d.d){t.checked?manual.add(d.d):manual.delete(d.d);cartUI();render()}});
 $('#cb').onclick=()=>{if(qty()){cartUI();$('#dc').showModal()}};$('#cl').onclick=()=>$('#dc').close();$('#hc').onclick=()=>$('#dh').close();
-$('#pm').onchange=$('#cash').oninput=cartUI;$('#sv').onclick=save;$('#sy').onclick=sync;$('#hi').onclick=history;
+$('#pm').onchange=$('#cash').oninput=cartUI;$('#sv').onclick=save;$('#sy').onclick=sync;$('#hi').onclick=history;$('#lp').onclick=()=>location.href='dashboard.html';
 $('#go').onclick=async()=>{try{await auth({email:$('#em').value,password:$('#pw').value},'password');start()}catch(e){$('#err').textContent=e.message}};
 async function start(){$('#login').hidden=!!ses;$('#app').hidden=!ses;if(!ses)return;await load();sync()}
 addEventListener('online',sync);start();
