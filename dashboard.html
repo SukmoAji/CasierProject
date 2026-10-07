@@ -35,19 +35,20 @@ async function api(path){if(Date.now()>ses.exp-60000){const r=await fetch(`${C.U
 const r=await fetch(`${C.URL}/rest/v1/${path}`,{headers:{apikey:C.KEY,Authorization:'Bearer '+ses.access_token}});if(!r.ok)throw new Error(await r.text());return r.json()}
 const rg=p=>{const n=new Date(),y=n.getFullYear(),m=n.getMonth(),t=n.getDate(),d=(a,b,c)=>new Date(a,b,c);
 return p==='today'?[d(y,m,t),d(y,m,t+1)]:p==='7'?[d(y,m,t-6),d(y,m,t+1)]:p==='30'?[d(y,m,t-29),d(y,m,t+1)]:p==='month'?[d(y,m,1),d(y,m+1,1)]:[d(y,m-1,1),d(y,m,1)]};
-async function fetchAll(p){const[a,b]=rg(p);let all=[],o=0;for(;;){const r=await api(`transactions?select=id,receipt_no,created_at,subtotal,total,discount_total,payment_method,voided_at,void_reason,created_by,transaction_items(item_name,qty,unit_price,line_total)&created_at=gte.${encodeURIComponent(a.toISOString())}&created_at=lt.${encodeURIComponent(b.toISOString())}&order=created_at&limit=1000&offset=${o}`);all=all.concat(r);if(r.length<1000)break;o+=1000}return all}
+async function fetchAll(p){const[a,b]=rg(p);let all=[],o=0;for(;;){const r=await api(`transactions?select=id,receipt_no,created_at,subtotal,total,discount_total,payment_method,voided_at,void_reason,created_by,transaction_items(menu_item_id,item_name,qty,unit_price,line_total)&created_at=gte.${encodeURIComponent(a.toISOString())}&created_at=lt.${encodeURIComponent(b.toISOString())}&order=created_at&limit=1000&offset=${o}`);all=all.concat(r);if(r.length<1000)break;o+=1000}return all}
 const sum=(a,f)=>a.reduce((s,x)=>s+f(x),0),grp=(a,k)=>a.reduce((m,x)=>{(m[k(x)]=m[k(x)]||[]).push(x);return m},{});
 const bars=rows=>{const mx=Math.max(...rows.map(r=>r[1]),1);return rows.map(([l,v,t])=>`<div class="b"><span class="l">${l}</span><div class="t"><i style="width:${v/mx*100}%"></i></div><span class="v">${t}</span></div>`).join('')};
 const esc=x=>String(x).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';'),EC={bahan:'Bahan baku',operasional:'Operasional',lain:'Lain-lain'};
 const fetchEx=p=>{const[a,b]=rg(p);return api(`expenses?select=id,created_at,category,description,amount,created_by&created_at=gte.${encodeURIComponent(a.toISOString())}&created_at=lt.${encodeURIComponent(b.toISOString())}&order=created_at&limit=1000`)};
-let LAST={all:[],ex:[]};
+let LAST={all:[],ex:[],ok:[]},CM={},NM={};
 const PM={cash:'Tunai',qris:'QRIS',other:'Lainnya'};
 async function load(){$('#st').textContent='Memuat...';try{
-const[all,ex]=await Promise.all([fetchAll($('#pr').value),fetchEx($('#pr').value)]),ok=all.filter(t=>!t.voided_at),vd=all.length-ok.length;
-LAST={all,ex};if(!ok.length&&!ex.length){$('#out').innerHTML='<p class="mut">Belum ada transaksi di periode ini.</p>';$('#st').textContent='';return}
+const[all,ex,mn,pf]=await Promise.all([fetchAll($('#pr').value),fetchEx($('#pr').value),api('menu_items?select=id,category&limit=1000'),api('profiles?select=id,name')]),ok=all.filter(t=>!t.voided_at),vd=all.length-ok.length;
+LAST={all,ex,ok};CM=Object.fromEntries(mn.map(m=>[m.id,m.category]));NM=Object.fromEntries(pf.map(p=>[p.id,p.name]));if(!ok.length&&!ex.length){$('#out').innerHTML='<p class="mut">Belum ada transaksi di periode ini.</p>';$('#st').textContent='';return}
 const om=sum(ok,t=>t.total);
 let h=`<div class="k"><div><small>Omzet</small><b>${rp(om)}</b></div><div><small>Transaksi</small><b>${ok.length}</b></div><div><small>Rata-rata/transaksi</small><b>${rp(ok.length?om/ok.length:0)}</b></div><div><small>Total diskon</small><b>${rp(sum(ok,t=>t.discount_total))}</b></div><div><small>Belanja</small><b>${rp(sum(ex,e=>e.amount))}</b></div><div><small>Omzet − belanja</small><b>${rp(om-sum(ex,e=>e.amount))}</b></div></div>`;
 if(vd)h+=`<p class="mut">${vd} transaksi dibatalkan (tidak dihitung)</p>`;
+h+='<h3>Cup terjual</h3><div id="cup"></div>';
 const pg=grp(ok,t=>t.payment_method);h+='<h3>Metode bayar</h3>'+bars(Object.entries(pg).map(([k,a])=>[PM[k]||k,sum(a,t=>t.total),`${rp(sum(a,t=>t.total))} · ${a.length}x`]));
 const dg=grp(ok,t=>new Date(t.created_at).toLocaleDateString('sv'));if(Object.keys(dg).length>1)h+='<h3>Per hari</h3>'+bars(Object.keys(dg).sort().map(k=>[k.slice(5),sum(dg[k],t=>t.total),`${rp(sum(dg[k],t=>t.total))} · ${dg[k].length}x`]));
 const hg=grp(ok,t=>new Date(t.created_at).getHours()),hs=Object.keys(hg).map(Number),r=[];for(let i=Math.min(...hs);i<=Math.max(...hs);i++){const a=hg[i]||[];r.push([i+':00',sum(a,t=>t.total),`${rp(sum(a,t=>t.total))} · ${a.length}x`])}
@@ -55,7 +56,19 @@ h+='<h3>Jam ramai</h3>'+bars(r);
 const im={};ok.forEach(t=>(t.transaction_items||[]).forEach(i=>{const x=im[i.item_name]=im[i.item_name]||{q:0,o:0};x.q+=i.qty;x.o+=i.line_total}));
 h+='<h3>Menu terlaris</h3><div class="tp">'+bars(Object.entries(im).sort((a,b)=>b[1].q-a[1].q).slice(0,10).map(([n,x])=>[n,x.q,`${x.q}x · ${rp(x.o)}`]))+'</div>';
 if(ex.length){const eg=grp(ex,e=>e.category);h+='<h3>Belanja per kategori</h3>'+bars(Object.entries(eg).map(([k,a])=>[EC[k]||esc(k),sum(a,e=>e.amount),rp(sum(a,e=>e.amount))]))+'<h3>Daftar belanja</h3>'+ex.slice().reverse().slice(0,30).map(e=>`<div class="b" style="grid-template-columns:50px 1fr auto"><span class="l">${new Date(e.created_at).toLocaleDateString('sv').slice(5)}</span><span>${esc(e.description)}</span><span class="v">${rp(e.amount)}</span></div>`).join('')}
-$('#out').innerHTML=h;$('#st').textContent=''}catch(e){console.error(e);$('#out').innerHTML='<p class="err">Gagal memuat. Pastikan online, lalu pilih periode lagi.</p>';$('#st').textContent=''}}
+$('#out').innerHTML=h;renderCup();$('#st').textContent=''}catch(e){console.error(e);$('#out').innerHTML='<p class="err">Gagal memuat. Pastikan online, lalu pilih periode lagi.</p>';$('#st').textContent=''}}
+function renderCup(){const ok=LAST.ok,q={},p=$('#pr').value;
+ok.forEach(t=>(t.transaction_items||[]).forEach(i=>{const c=CM[i.menu_item_id]||'Lainnya';q[c]=(q[c]||0)+i.qty}));
+const cats=Object.keys(q).sort(),saved=JSON.parse(localStorage.getItem('cupCats')||'null'),on=saved||cats.filter(c=>!/makan|food|snack|roti|cemil/i.test(c));
+const inCup=i=>on.includes(CM[i.menu_item_id]||'Lainnya'),tot=cats.filter(c=>on.includes(c)).reduce((a,c)=>a+q[c],0),tg=+localStorage.getItem('cupTarget_'+p)||0;
+const pk={};ok.forEach(t=>(t.transaction_items||[]).forEach(i=>{if(inCup(i)){const n=NM[t.created_by]||'Lainnya/lama';pk[n]=(pk[n]||0)+i.qty}}));
+$('#cup').innerHTML=`<div class="k"><div><small>Total cup</small><b>${tot}</b></div><div><small>Target periode ini</small><input id="tg" type="number" inputmode="numeric" value="${tg||''}" placeholder="isi target" style="padding:4px"></div></div>`
++(tg?`<div class="b" style="grid-template-columns:64px 1fr auto"><span class="l">Capaian</span><div class="t"><i style="width:${Math.min(100,tot/tg*100)}%"></i></div><span class="v">${tot}/${tg} · ${Math.round(tot/tg*100)}%${tot>=tg?' ✓ tercapai':''}</span></div>`:'')
++'<p class="mut" style="margin:10px 0 2px">Hitung sebagai cup (centang kategori minuman):</p>'
++cats.map(c=>`<label class="b" style="grid-template-columns:24px 1fr auto"><input type="checkbox" data-c="${esc(c)}" ${on.includes(c)?'checked':''}><span>${esc(c)}</span><span class="v">${q[c]}</span></label>`).join('')
++(Object.keys(pk).length?'<p class="mut" style="margin:10px 0 2px">Cup per kasir:</p>'+bars(Object.entries(pk).sort((a,b)=>b[1]-a[1]).map(([n,v])=>[esc(n),v,v+' cup'])):'')}
+document.addEventListener('change',e=>{const t=e.target;if(t.id==='tg'){localStorage.setItem('cupTarget_'+$('#pr').value,t.value);renderCup()}
+if(t.dataset.c!==undefined){const cats=[...document.querySelectorAll('#cup [data-c]')],on=cats.filter(x=>x.checked).map(x=>x.dataset.c);localStorage.setItem('cupCats',JSON.stringify(on));renderCup()}});
 const dl=(b,n)=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=n;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000)};
 const ld=src=>new Promise((ok,no)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=no;document.head.appendChild(s)});
 const dt=iso=>{const x=new Date(iso);return[x.toLocaleDateString('sv'),x.toTimeString().slice(0,5)]};
