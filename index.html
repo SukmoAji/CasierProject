@@ -119,7 +119,7 @@ $('#pm').onchange=$('#cash').oninput=cartUI;$('#sv').onclick=save;$('#sy').oncli
 let prof=JSON.parse(localStorage.getItem('prof')||'null'),BR=JSON.parse(localStorage.getItem('branches')||'[]'),br=localStorage.getItem('br')||'';
 const bname=id=>(BR.find(b=>b.id===id)||{}).name||'-';
 function B(){if(prof&&prof.role!=='owner')return prof.branch_id;if(!BR.some(b=>b.id===br))br=(BR.find(b=>b.is_active)||BR[0]||{}).id||'';return br}
-function hdr(){const o=prof.role==='owner',n=bname(B()),t=n==='-'?'Kasir':n;$('#ttl').textContent=t+(o?' ▾':'');$('#ttl').style.cursor=o?'pointer':'default';document.title=t;$('#who').textContent=prof.full_name||prof.name}
+function hdr(){const o=prof.role==='owner',n=bname(B()),t=n==='-'?'Kasir':n;$('#ttl').textContent=t+(o?' ▾':'');$('#ttl').style.cursor=o?'pointer':'default';document.title=t;$('#who').textContent=prof.full_name||prof.name;const h='manifest.webmanifest?n='+encodeURIComponent(t),l=document.querySelector('link[rel=manifest]');if(n!=='-'&&l.getAttribute('href')!==h)l.setAttribute('href',h)}
 const esc=x=>String(x).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
 const num=el=>+(el.value||'').replace(/\D/g,'')||0;
 document.addEventListener('input',e=>{const t=e.target;if(t.classList&&t.classList.contains('money')){const v=t.value.replace(/\D/g,'');t.value=v?(+v).toLocaleString('id-ID'):''}});

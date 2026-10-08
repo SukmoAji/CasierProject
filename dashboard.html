@@ -44,7 +44,8 @@ const esc=x=>String(x).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';'),EC={bahan
 const fetchEx=p=>{const[a,b]=rg(p);return api(`expenses?select=id,branch_id,created_at,category,description,amount,created_by&created_at=gte.${encodeURIComponent(a.toISOString())}&created_at=lt.${encodeURIComponent(b.toISOString())}&order=created_at${bf()}&limit=1000`)};
 let BRS=[],LAST={all:[],ex:[],ok:[]},CM={},NM={};
 const PM={cash:'Tunai',qris:'QRIS',other:'Lainnya'};
-async function load(){$('#st').textContent='Memuat...';try{
+function ttl(){const o=$('#bq').selectedOptions[0];document.title='Laporan'+(o?' · '+o.textContent:'')}
+async function load(){ttl();$('#st').textContent='Memuat...';try{
 const[all,ex,mn,pf]=await Promise.all([fetchAll($('#pr').value),fetchEx($('#pr').value),api('menu_items?select=id,category&limit=1000'),api('profiles?select=id,name,full_name')]),ok=all.filter(t=>!t.voided_at),vd=all.length-ok.length;
 LAST={all,ex,ok};CM=Object.fromEntries(mn.map(m=>[m.id,m.category]));NM=Object.fromEntries(pf.map(p=>[p.id,p.full_name||p.name]));if(!ok.length&&!ex.length){$('#out').innerHTML='<p class="mut">Belum ada transaksi di periode ini.</p>';$('#st').textContent='';return}
 const om=sum(ok,t=>t.total);
