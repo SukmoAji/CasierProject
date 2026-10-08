@@ -1,5 +1,5 @@
 // Naikkan versi ini kalau mau memaksa cache dibersihkan (file HTML sekarang selalu diambil terbaru saat online)
-const V = 'kasir-v14';
+const V = 'kasir-v15';
 const FILES = ['./', 'index.html', 'dashboard.html', 'config.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 self.addEventListener('install', e => e.waitUntil(
   caches.open(V).then(c => c.addAll(FILES.map(f => new Request(f, { cache: 'reload' }))))));

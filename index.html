@@ -33,7 +33,7 @@ label{display:block;font-size:14px;margin-top:6px}#rc{display:none}
 </style></head><body>
 <div id="login" hidden><h2>Kasir Eyang</h2><input id="em" placeholder="Nama atau email" autocapitalize="none" autocomplete="username"><input id="pw" type="password" placeholder="Password"><button id="go" style="width:100%">Masuk</button><p id="err" class="disc"></p></div>
 <div id="app" hidden>
-<header><b>Kasir Eyang</b><small id="who"></small><select id="bs" hidden style="width:auto;margin:0;padding:6px"></select><small id="st"></small><button class="o" id="sy">Sync</button><button class="o" id="hi">Riwayat</button><button class="o" id="eb">Belanja</button><button class="o" id="lp" hidden>Laporan</button><button class="o" id="mb" hidden>Menu</button><button class="o" id="sf" hidden>Staf</button><button class="o" id="lo">Keluar</button><div id="tk" hidden></div></header>
+<header><b id="ttl">Kasir</b><small id="who"></small><small id="st"></small><button class="o" id="sy">Sync</button><button class="o" id="hi">Riwayat</button><button class="o" id="eb">Belanja</button><button class="o" id="lp" hidden>Laporan</button><button class="o" id="mb" hidden>Menu</button><button class="o" id="sf" hidden>Staf</button><button class="o" id="lo">Keluar</button><div id="tk" hidden></div></header>
 <div class="tabs" id="tabs"></div><div class="grid" id="grid"></div>
 <div class="bar"><button id="cb"></button></div>
 </div>
@@ -46,6 +46,7 @@ label{display:block;font-size:14px;margin-top:6px}#rc{display:none}
 <dialog id="ds"><h3>Staf</h3><div id="sl"></div><select id="sbr"></select><input id="sfn" placeholder="Nama (tampil di header & struk)"><input id="sn" placeholder="ID login (huruf kecil/angka, tanpa spasi)" autocapitalize="none"><input id="sp" placeholder="Password (min. 6)"><button id="sa" style="width:100%">Tambah staf</button><p id="sm" class="disc"></p><button class="o" style="color:var(--ink);margin-top:8px" id="sc">Tutup</button></dialog>
 <dialog id="dm"><div class="tabs" id="mt"></div><div id="ml" style="max-height:28vh;overflow:auto"></div><h3 id="mh"></h3><div id="mf"></div><p id="mm" class="disc"></p><div style="display:flex;gap:8px;margin-top:8px"><button class="o" style="color:var(--ink)" id="mx">Tutup</button><button class="o" style="color:var(--ink)" id="mn">Baru</button><button id="ms" style="flex:1">Simpan</button></div></dialog>
 <div id="rc"></div>
+<dialog id="db"><h3>Pilih cabang</h3><div id="bl" style="max-height:40vh;overflow:auto"></div><h3>Tambah cabang</h3><input id="bn" placeholder="Nama cabang baru"><label>Salin menu &amp; diskon dari<select id="bsrc"></select></label><button id="ba" style="width:100%;margin-top:8px">Tambah cabang</button><p id="bm" class="disc"></p><button class="o" style="color:var(--ink)" id="bx">Tutup</button></dialog>
 <dialog id="dh"><div id="hist"></div><button class="o" style="color:var(--ink);margin-top:8px" id="hc">Tutup</button></dialog>
 <script src="config.js"></script>
 <script>
@@ -104,6 +105,8 @@ if(d.v)voidTx(d.v);
 if(d.k){K=d.k;mOpen()}
 if(d.ed!==undefined)fill(ROWS[d.ed]);
 if(d.pw){const p=prompt('Password baru (min. 6 karakter)');if(p)fn({action:'set_password',id:d.pw,password:p}).then(()=>alert('Password diubah')).catch(e=>alert(e.message))}
+if(d.bn){const n=prompt('Nama cabang',bname(d.bn));if(n&&n.trim())api('branches?id=eq.'+d.bn,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({name:n.trim()})}).then(sync).then(brList).catch(e=>alert(e.message))}
+if(d.bt){if(d.bt===B()&&d.on==='0')alert('Cabang yang sedang dipakai tidak bisa dinonaktifkan');else api('branches?id=eq.'+d.bt,{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({is_active:d.on==='1'})}).then(sync).then(brList).catch(e=>alert(e.message))}
 if(d.bc){const i=prompt('Pindahkan ke cabang nomor:\n'+BR.map((b,k)=>(k+1)+') '+b.name).join('\n')),b=BR[(+i||0)-1];if(b)fn({action:'set_branch',id:d.bc,branch_id:b.id}).then(staffList).catch(e=>alert(e.message))}
 if(d.nm){const n=prompt('Nama tampilan baru');if(n&&n.trim())fn({action:'set_name',id:d.nm,full_name:n.trim()}).then(staffList).catch(e=>alert(e.message))}
 if(d.act)fn({action:'set_active',id:d.act,active:d.on==='1'}).then(staffList).catch(e=>alert(e.message));
@@ -116,8 +119,7 @@ $('#pm').onchange=$('#cash').oninput=cartUI;$('#sv').onclick=save;$('#sy').oncli
 let prof=JSON.parse(localStorage.getItem('prof')||'null'),BR=JSON.parse(localStorage.getItem('branches')||'[]'),br=localStorage.getItem('br')||'';
 const bname=id=>(BR.find(b=>b.id===id)||{}).name||'-';
 function B(){if(prof&&prof.role!=='owner')return prof.branch_id;if(!BR.some(b=>b.id===br))br=(BR.find(b=>b.is_active)||BR[0]||{}).id||'';return br}
-function hdr(){$('#who').textContent=(prof.full_name||prof.name)+(prof.role!=='owner'?' · '+bname(B()):'');const bs=$('#bs');bs.hidden=prof.role!=='owner';if(!bs.hidden){bs.innerHTML=BR.filter(b=>b.is_active).map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('');bs.value=B()}}
-$('#bs').onchange=async()=>{if(!navigator.onLine){alert('Ganti cabang butuh internet');$('#bs').value=B();return}br=$('#bs').value;localStorage.setItem('br',br);cart.clear();manual.clear();await idb('menu','clear');await idb('discounts','clear');await load();await sync();tick()};
+function hdr(){const o=prof.role==='owner',n=bname(B()),t=n==='-'?'Kasir':n;$('#ttl').textContent=t+(o?' ▾':'');$('#ttl').style.cursor=o?'pointer':'default';document.title=t;$('#who').textContent=prof.full_name||prof.name}
 const esc=x=>String(x).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
 const num=el=>+(el.value||'').replace(/\D/g,'')||0;
 document.addEventListener('input',e=>{const t=e.target;if(t.classList&&t.classList.contains('money')){const v=t.value.replace(/\D/g,'');t.value=v?(+v).toLocaleString('id-ID'):''}});
@@ -135,7 +137,7 @@ $('#sf').onclick=()=>{$('#sbr').innerHTML=BR.filter(b=>b.is_active).map(b=>`<opt
 // ---- Struk (cetak lewat dialog print browser / RawBT)
 const PM2={cash:'Tunai',qris:'QRIS',other:'Lainnya'};$('#pc').checked=localStorage.pc==='1';$('#pc').onchange=()=>localStorage.pc=$('#pc').checked?1:0;
 function printRc(h,items,discs){const n=new Date(h.created_at),R=(a,b)=>`<div class="rr"><span>${a}</span><span>${b}</span></div>`,pay=h.cash_received||h.total;
-$('#rc').innerHTML=`<b>Kedai Kopi Eyang</b><br>${esc(bname(h.branch_id))}<br>${n.toLocaleDateString('id-ID')} ${n.toTimeString().slice(0,5)}<br>${h.receipt_no} · ${esc(prof.full_name||prof.name)}<hr>`+items.map(i=>`${esc(i.item_name)}${R(i.qty+' x '+rp(i.unit_price),rp(i.line_total))}`).join('')+'<hr>'+R('Subtotal',rp(h.subtotal))+discs.map(d=>R(esc(d.discount_name),'-'+rp(d.amount))).join('')+R('<b>TOTAL</b>','<b>'+rp(h.total)+'</b>')+R(PM2[h.payment_method],rp(pay))+(h.payment_method==='cash'?R('Kembali',rp(pay-h.total)):'')+'<hr><center>Terima kasih!</center>';setTimeout(()=>print(),200)}
+$('#rc').innerHTML=`<b>${esc(bname(h.branch_id))}</b><br>${n.toLocaleDateString('id-ID')} ${n.toTimeString().slice(0,5)}<br>${h.receipt_no} · ${esc(prof.full_name||prof.name)}<hr>`+items.map(i=>`${esc(i.item_name)}${R(i.qty+' x '+rp(i.unit_price),rp(i.line_total))}`).join('')+'<hr>'+R('Subtotal',rp(h.subtotal))+discs.map(d=>R(esc(d.discount_name),'-'+rp(d.amount))).join('')+R('<b>TOTAL</b>','<b>'+rp(h.total)+'</b>')+R(PM2[h.payment_method],rp(pay))+(h.payment_method==='cash'?R('Kembali',rp(pay-h.total)):'')+'<hr><center>Terima kasih!</center>';setTimeout(()=>print(),200)}
 // ---- Kelola menu & diskon (owner)
 let K='menu',ED=null,ROWS=[];
 const F={menu:{t:'menu_items',f:[['name','Nama','text'],['category','Kategori','text'],['price','Harga (Rp)','money'],['is_active','Aktif','check']]},
@@ -162,6 +164,15 @@ else{['value','buy_qty','free_qty','min_qty','priority'].forEach(k=>o[k]!=null&&
 if(!ED)o.branch_id=B();await api(F[K].t+(ED?'?id=eq.'+ED:''),{method:ED?'PATCH':'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify(o)});
 await mList();fill(null);$('#mm').textContent='Tersimpan';sync()}catch(e){$('#mm').textContent=e.message}}
 $('#mb').onclick=mOpen;$('#mx').onclick=()=>$('#dm').close();$('#mn').onclick=()=>K==='msg'||fill(null);$('#ms').onclick=mSave;
+// ---- Cabang (owner): klik judul header
+function brList(){$('#bl').innerHTML=BR.map(b=>`<div class="row"><label style="display:flex;gap:8px;align-items:center;margin:0;flex:1"><input type="radio" name="brsel" value="${b.id}" ${b.id===B()?'checked':''} ${b.is_active?'':'disabled'} style="width:auto"><span class="${b.is_active?'':'vd'}">${esc(b.name)}</span></label><span><button data-bn="${b.id}">Nama</button> <button data-bt="${b.id}" data-on="${b.is_active?0:1}">${b.is_active?'Nonaktifkan':'Aktifkan'}</button></span></div>`).join('');$('#bsrc').innerHTML='<option value="">Kosong</option>'+BR.filter(b=>b.is_active).map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('')}
+async function switchBr(id){if(!navigator.onLine){alert('Ganti cabang butuh internet');brList();return}br=id;localStorage.setItem('br',br);cart.clear();manual.clear();$('#db').close();await idb('menu','clear');await idb('discounts','clear');await load();hdr();await sync();tick()}
+document.addEventListener('change',e=>{if(e.target.name==='brsel')switchBr(e.target.value)});
+$('#ttl').onclick=()=>{if(prof.role==='owner'){brList();$('#bm').textContent='';$('#db').showModal()}};$('#bx').onclick=()=>$('#db').close();
+$('#ba').onclick=async()=>{const n=$('#bn').value.trim();$('#bm').textContent='';if(!n)return;try{const[r]=await api('branches',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({name:n})}),src=$('#bsrc').value;
+if(src){const mi=await api('menu_items?branch_id=eq.'+src),di=await api('discounts?branch_id=eq.'+src+'&scope=neq.item'),cp=a=>JSON.stringify(a.map(({id,created_at,updated_at,...x})=>({...x,branch_id:r.id})));
+if(mi.length)await api('menu_items',{method:'POST',headers:{Prefer:'return=minimal'},body:cp(mi)});if(di.length)await api('discounts',{method:'POST',headers:{Prefer:'return=minimal'},body:cp(di)})}
+$('#bn').value='';await sync();brList();$('#bm').textContent='Cabang ditambahkan'}catch(e){$('#bm').textContent=e.message}};
 addEventListener('online',sync);start();
 // ---- PWA update
 if('serviceWorker'in navigator){navigator.serviceWorker.register('sw.js').then(r=>{const w=()=>r.waiting&&navigator.serviceWorker.controller&&($('#ban').hidden=false);w();r.addEventListener('updatefound',()=>r.installing.addEventListener('statechange',w));$('#upd').onclick=()=>r.waiting.postMessage('SKIP_WAITING')});
