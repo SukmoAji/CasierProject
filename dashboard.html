@@ -24,6 +24,7 @@ h3{margin:20px 0 6px}
 <header><a href="index.html">← Kasir</a><b>Laporan</b><small id="st"></small></header>
 <main>
 <select id="pr"><option value="today">Hari ini</option><option value="7">7 hari terakhir</option><option value="30">30 hari terakhir</option><option value="month">Bulan ini</option><option value="last">Bulan lalu</option></select>
+<select id="bq" style="margin-top:8px"></select>
 <div style="display:flex;gap:8px;margin-top:8px"><button id="xl">Unduh Excel</button><button id="bk" class="o">Backup data (JSON)</button></div>
 <div id="out"></div>
 </main>
@@ -35,12 +36,13 @@ async function api(path){if(Date.now()>ses.exp-60000){const r=await fetch(`${C.U
 const r=await fetch(`${C.URL}/rest/v1/${path}`,{headers:{apikey:C.KEY,Authorization:'Bearer '+ses.access_token}});if(!r.ok)throw new Error(await r.text());return r.json()}
 const rg=p=>{const n=new Date(),y=n.getFullYear(),m=n.getMonth(),t=n.getDate(),d=(a,b,c)=>new Date(a,b,c);
 return p==='today'?[d(y,m,t),d(y,m,t+1)]:p==='7'?[d(y,m,t-6),d(y,m,t+1)]:p==='30'?[d(y,m,t-29),d(y,m,t+1)]:p==='month'?[d(y,m,1),d(y,m+1,1)]:[d(y,m-1,1),d(y,m,1)]};
-async function fetchAll(p){const[a,b]=rg(p);let all=[],o=0;for(;;){const r=await api(`transactions?select=id,receipt_no,created_at,subtotal,total,discount_total,payment_method,voided_at,void_reason,created_by,transaction_items(menu_item_id,item_name,qty,unit_price,line_total)&created_at=gte.${encodeURIComponent(a.toISOString())}&created_at=lt.${encodeURIComponent(b.toISOString())}&order=created_at&limit=1000&offset=${o}`);all=all.concat(r);if(r.length<1000)break;o+=1000}return all}
+async function fetchAll(p){const[a,b]=rg(p);let all=[],o=0;for(;;){const r=await api(`transactions?select=id,branch_id,receipt_no,created_at,subtotal,total,discount_total,payment_method,voided_at,void_reason,created_by,transaction_items(menu_item_id,item_name,qty,unit_price,line_total)&created_at=gte.${encodeURIComponent(a.toISOString())}&created_at=lt.${encodeURIComponent(b.toISOString())}&order=created_at${bf()}&limit=1000&offset=${o}`);all=all.concat(r);if(r.length<1000)break;o+=1000}return all}
+const bf=()=>$('#bq').value==='all'?'':'&branch_id=eq.'+$('#bq').value;
 const sum=(a,f)=>a.reduce((s,x)=>s+f(x),0),grp=(a,k)=>a.reduce((m,x)=>{(m[k(x)]=m[k(x)]||[]).push(x);return m},{});
 const bars=rows=>{const mx=Math.max(...rows.map(r=>r[1]),1);return rows.map(([l,v,t])=>`<div class="b"><span class="l">${l}</span><div class="t"><i style="width:${v/mx*100}%"></i></div><span class="v">${t}</span></div>`).join('')};
 const esc=x=>String(x).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';'),EC={bahan:'Bahan baku',operasional:'Operasional',lain:'Lain-lain'};
-const fetchEx=p=>{const[a,b]=rg(p);return api(`expenses?select=id,created_at,category,description,amount,created_by&created_at=gte.${encodeURIComponent(a.toISOString())}&created_at=lt.${encodeURIComponent(b.toISOString())}&order=created_at&limit=1000`)};
-let LAST={all:[],ex:[],ok:[]},CM={},NM={};
+const fetchEx=p=>{const[a,b]=rg(p);return api(`expenses?select=id,branch_id,created_at,category,description,amount,created_by&created_at=gte.${encodeURIComponent(a.toISOString())}&created_at=lt.${encodeURIComponent(b.toISOString())}&order=created_at${bf()}&limit=1000`)};
+let BRS=[],LAST={all:[],ex:[],ok:[]},CM={},NM={};
 const PM={cash:'Tunai',qris:'QRIS',other:'Lainnya'};
 async function load(){$('#st').textContent='Memuat...';try{
 const[all,ex,mn,pf]=await Promise.all([fetchAll($('#pr').value),fetchEx($('#pr').value),api('menu_items?select=id,category&limit=1000'),api('profiles?select=id,name,full_name')]),ok=all.filter(t=>!t.voided_at),vd=all.length-ok.length;
@@ -49,6 +51,7 @@ const om=sum(ok,t=>t.total);
 let h=`<div class="k"><div><small>Omzet</small><b>${rp(om)}</b></div><div class="split"><span><small>Transaksi</small><b>${ok.length}</b></span><span><small>Total cup</small><b id="kc">-</b></span></div><div><small>Rata-rata/transaksi</small><b>${rp(ok.length?om/ok.length:0)}</b></div><div><small>Total diskon</small><b>${rp(sum(ok,t=>t.discount_total))}</b></div><div><small>Belanja</small><b>${rp(sum(ex,e=>e.amount))}</b></div><div><small>Omzet − belanja</small><b>${rp(om-sum(ex,e=>e.amount))}</b></div></div>`;
 if(vd)h+=`<p class="mut">${vd} transaksi dibatalkan (tidak dihitung)</p>`;
 h+='<h3>Cup terjual</h3><div id="cup"></div>';
+if($('#bq').value==='all'&&BRS.length>1){const bg=grp(ok,t=>t.branch_id);h+='<h3>Per cabang</h3>'+bars(BRS.map(b=>[esc(b.name),sum(bg[b.id]||[],t=>t.total),`${rp(sum(bg[b.id]||[],t=>t.total))} · ${(bg[b.id]||[]).length}x`]))}
 const pg=grp(ok,t=>t.payment_method);h+='<h3>Metode bayar</h3>'+bars(Object.entries(pg).map(([k,a])=>[PM[k]||k,sum(a,t=>t.total),`${rp(sum(a,t=>t.total))} · ${a.length}x`]));
 const dg=grp(ok,t=>new Date(t.created_at).toLocaleDateString('sv'));if(Object.keys(dg).length>1)h+='<h3>Per hari</h3>'+bars(Object.keys(dg).sort().map(k=>[k.slice(5),sum(dg[k],t=>t.total),`${rp(sum(dg[k],t=>t.total))} · ${dg[k].length}x`]));
 const hg=grp(ok,t=>new Date(t.created_at).getHours()),hs=Object.keys(hg).map(Number),r=[];for(let i=Math.min(...hs);i<=Math.max(...hs);i++){const a=hg[i]||[];r.push([i+':00',sum(a,t=>t.total),`${rp(sum(a,t=>t.total))} · ${a.length}x`])}
@@ -60,7 +63,7 @@ $('#out').innerHTML=h;renderCup();$('#st').textContent=''}catch(e){console.error
 function renderCup(){const ok=LAST.ok,q={},p=$('#pr').value;
 ok.forEach(t=>(t.transaction_items||[]).forEach(i=>{const c=CM[i.menu_item_id]||'Lainnya';q[c]=(q[c]||0)+i.qty}));
 const cats=Object.keys(q).sort(),saved=JSON.parse(localStorage.getItem('cupCats')||'null'),on=saved||cats.filter(c=>!/makan|food|snack|roti|cemil/i.test(c));
-const inCup=i=>on.includes(CM[i.menu_item_id]||'Lainnya'),tot=cats.filter(c=>on.includes(c)).reduce((a,c)=>a+q[c],0),tg=+localStorage.getItem('cupTarget_'+p)||0;
+const inCup=i=>on.includes(CM[i.menu_item_id]||'Lainnya'),tot=cats.filter(c=>on.includes(c)).reduce((a,c)=>a+q[c],0),tg=+localStorage.getItem('cupTarget_'+p+'_'+$('#bq').value)||0;
 {const kc=$('#kc');if(kc)kc.textContent=tot}
 const pk={};ok.forEach(t=>(t.transaction_items||[]).forEach(i=>{if(inCup(i)){const n=NM[t.created_by]||'Lainnya/lama';pk[n]=(pk[n]||0)+i.qty}}));
 $('#cup').innerHTML=`<div class="k"><div><small>Total cup</small><b>${tot}</b></div><div><small>Target periode ini</small><input id="tg" type="number" inputmode="numeric" value="${tg||''}" placeholder="isi target" style="padding:4px"></div></div>`
@@ -68,19 +71,20 @@ $('#cup').innerHTML=`<div class="k"><div><small>Total cup</small><b>${tot}</b></
 +'<p class="mut" style="margin:10px 0 2px">Hitung sebagai cup (centang kategori minuman):</p>'
 +cats.map(c=>`<label class="b" style="grid-template-columns:24px 1fr auto"><input type="checkbox" data-c="${esc(c)}" ${on.includes(c)?'checked':''}><span>${esc(c)}</span><span class="v">${q[c]}</span></label>`).join('')
 +(Object.keys(pk).length?'<p class="mut" style="margin:10px 0 2px">Cup per kasir:</p>'+bars(Object.entries(pk).sort((a,b)=>b[1]-a[1]).map(([n,v])=>[esc(n),v,v+' cup'])):'')}
-document.addEventListener('change',e=>{const t=e.target;if(t.id==='tg'){localStorage.setItem('cupTarget_'+$('#pr').value,t.value);renderCup()}
+document.addEventListener('change',e=>{const t=e.target;if(t.id==='tg'){localStorage.setItem('cupTarget_'+$('#pr').value+'_'+$('#bq').value,t.value);renderCup()}
 if(t.dataset.c!==undefined){const cats=[...document.querySelectorAll('#cup [data-c]')],on=cats.filter(x=>x.checked).map(x=>x.dataset.c);localStorage.setItem('cupCats',JSON.stringify(on));renderCup()}});
 const dl=(b,n)=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=n;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000)};
 const ld=src=>new Promise((ok,no)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=no;document.head.appendChild(s)});
 const dt=iso=>{const x=new Date(iso);return[x.toLocaleDateString('sv'),x.toTimeString().slice(0,5)]};
 async function allOf(t){let a=[],o=0;for(;;){const r=await api(`${t}?order=id&limit=1000&offset=${o}`);a=a.concat(r);if(r.length<1000)return a;o+=1000}}
 $('#xl').onclick=async()=>{try{if(!window.XLSX)await ld('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
-const nm=Object.fromEntries((await api('profiles?select=id,name,full_name')).map(p=>[p.id,p.full_name||p.name])),{all,ex}=LAST;
-const T=all.map(t=>{const[d,j]=dt(t.created_at);return{'No Struk':t.receipt_no,Tanggal:d,Jam:j,Kasir:nm[t.created_by]||'',Subtotal:t.subtotal,Diskon:t.discount_total,Total:t.total,Metode:PM[t.payment_method]||t.payment_method,Status:t.voided_at?'BATAL':'OK','Alasan batal':t.void_reason||''}});
-const I=all.flatMap(t=>{const[d]=dt(t.created_at);return(t.transaction_items||[]).map(i=>({'No Struk':t.receipt_no,Tanggal:d,Item:i.item_name,Qty:i.qty,Harga:i.unit_price,Total:i.line_total,Status:t.voided_at?'BATAL':'OK'}))});
-const E=ex.map(e=>{const[d,j]=dt(e.created_at);return{Tanggal:d,Jam:j,Kategori:EC[e.category]||e.category,Keterangan:e.description,Jumlah:e.amount,'Dicatat oleh':nm[e.created_by]||''}});
+const bn=Object.fromEntries(BRS.map(b=>[b.id,b.name])),nm=Object.fromEntries((await api('profiles?select=id,name,full_name')).map(p=>[p.id,p.full_name||p.name])),{all,ex}=LAST;
+const T=all.map(t=>{const[d,j]=dt(t.created_at);return{Cabang:bn[t.branch_id]||'','No Struk':t.receipt_no,Tanggal:d,Jam:j,Kasir:nm[t.created_by]||'',Subtotal:t.subtotal,Diskon:t.discount_total,Total:t.total,Metode:PM[t.payment_method]||t.payment_method,Status:t.voided_at?'BATAL':'OK','Alasan batal':t.void_reason||''}});
+const I=all.flatMap(t=>{const[d]=dt(t.created_at);return(t.transaction_items||[]).map(i=>({Cabang:bn[t.branch_id]||'','No Struk':t.receipt_no,Tanggal:d,Item:i.item_name,Qty:i.qty,Harga:i.unit_price,Total:i.line_total,Status:t.voided_at?'BATAL':'OK'}))});
+const E=ex.map(e=>{const[d,j]=dt(e.created_at);return{Cabang:bn[e.branch_id]||'',Tanggal:d,Jam:j,Kategori:EC[e.category]||e.category,Keterangan:e.description,Jumlah:e.amount,'Dicatat oleh':nm[e.created_by]||''}});
 const wb=XLSX.utils.book_new();[['Transaksi',T],['Item',I],['Belanja',E]].forEach(([n,r])=>XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(r),n));
 XLSX.writeFile(wb,`laporan-${$('#pr').value}-${new Date().toLocaleDateString('sv')}.xlsx`)}catch(e){console.error(e);alert('Gagal membuat Excel. Pastikan online.')}};
-$('#bk').onclick=async()=>{try{const o={exported_at:new Date().toISOString()};for(const t of['menu_items','discounts','transactions','transaction_items','transaction_discounts','expenses'])o[t]=await allOf(t);dl(new Blob([JSON.stringify(o)],{type:'application/json'}),`backup-kasir-${new Date().toLocaleDateString('sv')}.json`)}catch(e){console.error(e);alert('Backup gagal. Pastikan online.')}};
-$('#pr').onchange=load;load();
+$('#bk').onclick=async()=>{try{const o={exported_at:new Date().toISOString()};for(const t of['branches','profiles','menu_items','discounts','transactions','transaction_items','transaction_discounts','expenses'])o[t]=await allOf(t);dl(new Blob([JSON.stringify(o)],{type:'application/json'}),`backup-kasir-${new Date().toLocaleDateString('sv')}.json`)}catch(e){console.error(e);alert('Backup gagal. Pastikan online.')}};
+$('#pr').onchange=load;$('#bq').onchange=()=>{localStorage.setItem('dbr',$('#bq').value);load()};
+api('branches?order=name').then(b=>{BRS=b;$('#bq').innerHTML='<option value="all">Semua cabang</option>'+b.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('');$('#bq').value=localStorage.getItem('dbr')||'all';if(!$('#bq').value)$('#bq').value='all';load()}).catch(()=>{$('#bq').innerHTML='<option value="all">Semua cabang</option>';load()});
 </script></body></html>
