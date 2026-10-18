@@ -14,6 +14,7 @@ select{font:inherit;padding:10px;border:1px solid var(--line);border-radius:8px;
 .k{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}
 .k div{background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px}
 .k .split{display:flex}.k .split span{flex:1}.k .split span+span{border-left:1px solid var(--line);padding-left:12px}.k small{color:var(--mut)}.k b{display:block;font-size:20px}
+#rgb{display:none;gap:8px;margin-top:8px}#rgb.on{display:flex}#rgb input{font:inherit;padding:10px;border:1px solid var(--line);border-radius:8px;flex:1;min-width:0;background:#fff}
 h3{margin:20px 0 6px}
 .b{display:grid;grid-template-columns:64px 1fr auto;gap:8px;align-items:center;padding:4px 0;font-size:14px}
 .b .t{background:#e4e6dd;height:14px;border-radius:3px;overflow:hidden}.b i{display:block;height:100%;background:var(--g)}
@@ -23,7 +24,8 @@ h3{margin:20px 0 6px}
 </style></head><body>
 <header><a href="index.html">← Kasir</a><b>Laporan</b><small id="st"></small></header>
 <main>
-<select id="pr"><option value="today">Hari ini</option><option value="7">7 hari terakhir</option><option value="30">30 hari terakhir</option><option value="month">Bulan ini</option><option value="last">Bulan lalu</option></select>
+<select id="pr"><option value="today">Hari ini</option><option value="yesterday">Kemarin</option><option value="7">7 hari terakhir</option><option value="month">Bulan ini</option><option value="last">Bulan lalu</option><option value="range">Pilih tanggal</option></select>
+<div id="rgb"><input type="date" id="d1"><input type="date" id="d2"></div>
 <select id="bq" style="margin-top:8px"></select>
 <div style="display:flex;gap:8px;margin-top:8px"><button id="xl">Unduh Excel</button><button id="bk" class="o">Backup data (JSON)</button></div>
 <div id="out"></div>
@@ -31,12 +33,14 @@ h3{margin:20px 0 6px}
 <script src="config.js"></script>
 <script>
 const C=CONFIG,$=s=>document.querySelector(s),rp=n=>'Rp'+Math.round(n).toLocaleString('id-ID');
-let ses=JSON.parse(localStorage.getItem('ses')||'null');const prof=JSON.parse(localStorage.getItem('prof')||'null');if(!ses||!prof||prof.role!=='owner')location.href='index.html';
-async function api(path){if(Date.now()>ses.exp-60000){const r=await fetch(`${C.URL}/auth/v1/token?grant_type=refresh_token`,{method:'POST',headers:{apikey:C.KEY,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:ses.refresh_token})});const j=await r.json();if(!r.ok){location.href='index.html';return}ses={...j,exp:Date.now()+j.expires_in*1000};localStorage.setItem('ses',JSON.stringify(ses))}
-const r=await fetch(`${C.URL}/rest/v1/${path}`,{headers:{apikey:C.KEY,Authorization:'Bearer '+ses.access_token}});if(!r.ok)throw new Error(await r.text());return r.json()}
+let ses=JSON.parse(localStorage.getItem('ses')||'null');const prof=JSON.parse(localStorage.getItem('prof')||'null');if(!ses||!prof)location.href='index.html';const OWN=!!prof&&prof.role==='owner';
+async function api(path,opt={}){if(Date.now()>ses.exp-60000){const r=await fetch(`${C.URL}/auth/v1/token?grant_type=refresh_token`,{method:'POST',headers:{apikey:C.KEY,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:ses.refresh_token})});const j=await r.json();if(!r.ok){location.href='index.html';return}ses={...j,exp:Date.now()+j.expires_in*1000};localStorage.setItem('ses',JSON.stringify(ses))}
+const r=await fetch(`${C.URL}/rest/v1/${path}`,{...opt,headers:{apikey:C.KEY,Authorization:'Bearer '+ses.access_token,'Content-Type':'application/json',...opt.headers}});const x=await r.text();if(!r.ok)throw new Error(x);return x?JSON.parse(x):null}
+const pd=v=>{const[y,m,x]=v.split('-').map(Number);return new Date(y,m-1,x)};
+const rgc=()=>{const s=$('#d1').value?pd($('#d1').value):new Date(new Date().setHours(0,0,0,0)),t=$('#d2').value?pd($('#d2').value):s;let e=new Date(t.getFullYear(),t.getMonth(),t.getDate()+1);if(e<=s)e=new Date(s.getFullYear(),s.getMonth(),s.getDate()+1);return[s,e]};
 const rg=p=>{const n=new Date(),y=n.getFullYear(),m=n.getMonth(),t=n.getDate(),d=(a,b,c)=>new Date(a,b,c);
-return p==='today'?[d(y,m,t),d(y,m,t+1)]:p==='7'?[d(y,m,t-6),d(y,m,t+1)]:p==='30'?[d(y,m,t-29),d(y,m,t+1)]:p==='month'?[d(y,m,1),d(y,m+1,1)]:[d(y,m-1,1),d(y,m,1)]};
-async function fetchAll(p){const[a,b]=rg(p);let all=[],o=0;for(;;){const r=await api(`transactions?select=id,branch_id,receipt_no,created_at,subtotal,total,discount_total,payment_method,voided_at,void_reason,created_by,transaction_items(menu_item_id,item_name,qty,unit_price,line_total)&created_at=gte.${encodeURIComponent(a.toISOString())}&created_at=lt.${encodeURIComponent(b.toISOString())}&order=created_at${bf()}&limit=1000&offset=${o}`);all=all.concat(r);if(r.length<1000)break;o+=1000}return all}
+return p==='today'?[d(y,m,t),d(y,m,t+1)]:p==='yesterday'?[d(y,m,t-1),d(y,m,t)]:p==='7'?[d(y,m,t-6),d(y,m,t+1)]:p==='month'?[d(y,m,1),d(y,m+1,1)]:p==='range'?rgc():[d(y,m-1,1),d(y,m,1)]};
+async function fetchAll(p){const[a,b]=rg(p);let all=[],o=0;for(;;){const r=await api(`transactions?select=id,branch_id,receipt_no,created_at,subtotal,total,discount_total,payment_method,voided_at,void_reason,voided_by,created_by,transaction_items(menu_item_id,item_name,qty,unit_price,line_total)&created_at=gte.${encodeURIComponent(a.toISOString())}&created_at=lt.${encodeURIComponent(b.toISOString())}&order=created_at${bf()}&limit=1000&offset=${o}`);all=all.concat(r);if(r.length<1000)break;o+=1000}return all}
 const bf=()=>$('#bq').value==='all'?'':'&branch_id=eq.'+$('#bq').value;
 const sum=(a,f)=>a.reduce((s,x)=>s+f(x),0),grp=(a,k)=>a.reduce((m,x)=>{(m[k(x)]=m[k(x)]||[]).push(x);return m},{});
 const bars=rows=>{const mx=Math.max(...rows.map(r=>r[1]),1);return rows.map(([l,v,t])=>`<div class="b"><span class="l">${l}</span><div class="t"><i style="width:${v/mx*100}%"></i></div><span class="v">${t}</span></div>`).join('')};
@@ -44,13 +48,14 @@ const esc=x=>String(x).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';'),EC={bahan
 const fetchEx=p=>{const[a,b]=rg(p);return api(`expenses?select=id,branch_id,created_at,category,description,amount,created_by&created_at=gte.${encodeURIComponent(a.toISOString())}&created_at=lt.${encodeURIComponent(b.toISOString())}&order=created_at${bf()}&limit=1000`)};
 let BRS=[],LAST={all:[],ex:[],ok:[]},CM={},NM={};
 const PM={cash:'Tunai',qris:'QRIS',other:'Lainnya'};
-function ttl(){const o=$('#bq').selectedOptions[0];document.title='Laporan'+(o?' · '+o.textContent:'')}
-async function load(){ttl();$('#st').textContent='Memuat...';try{
+function ttl(){if(!OWN){const b=JSON.parse(localStorage.getItem('branches')||'[]').find(x=>x.id===prof.branch_id);document.title='Laporan'+(b?' · '+b.name:'');return}const o=$('#bq').selectedOptions[0];document.title='Laporan'+(o?' · '+o.textContent:'')}
+async function load(){ttl();if(!OWN)return loadStaff();$('#st').textContent='Memuat...';try{
 const[all,ex,mn,pf]=await Promise.all([fetchAll($('#pr').value),fetchEx($('#pr').value),api('menu_items?select=id,category&limit=1000'),api('profiles?select=id,name,full_name')]),ok=all.filter(t=>!t.voided_at),vd=all.length-ok.length;
 LAST={all,ex,ok};CM=Object.fromEntries(mn.map(m=>[m.id,m.category]));NM=Object.fromEntries(pf.map(p=>[p.id,p.full_name||p.name]));if(!ok.length&&!ex.length){$('#out').innerHTML='<p class="mut">Belum ada transaksi di periode ini.</p>';$('#st').textContent='';return}
 const om=sum(ok,t=>t.total);
 let h=`<div class="k"><div><small>Omzet</small><b>${rp(om)}</b></div><div class="split"><span><small>Transaksi</small><b>${ok.length}</b></span><span><small>Total cup</small><b id="kc">-</b></span></div><div><small>Rata-rata/transaksi</small><b>${rp(ok.length?om/ok.length:0)}</b></div><div><small>Total diskon</small><b>${rp(sum(ok,t=>t.discount_total))}</b></div><div><small>Belanja</small><b>${rp(sum(ex,e=>e.amount))}</b></div><div><small>Omzet − belanja</small><b>${rp(om-sum(ex,e=>e.amount))}</b></div></div>`;
 if(vd)h+=`<p class="mut">${vd} transaksi dibatalkan (tidak dihitung)</p>`;
+if(vd)h+='<h3>Dibatalkan</h3>'+all.filter(t=>t.voided_at).map(t=>`<div class="b" style="grid-template-columns:1fr auto"><span>${esc(t.receipt_no.slice(-6))} · ${esc(NM[t.created_by]||'-')} <small class="mut">· ${esc(t.void_reason||'-')} (oleh ${esc(NM[t.voided_by]||'owner')})</small></span><span class="v">${rp(t.total)}</span></div>`).join('');
 h+='<h3>Cup terjual</h3><div id="cup"></div>';
 if($('#bq').value==='all'&&BRS.length>1){const bg=grp(ok,t=>t.branch_id);h+='<h3>Per cabang</h3>'+bars(BRS.map(b=>[esc(b.name),sum(bg[b.id]||[],t=>t.total),`${rp(sum(bg[b.id]||[],t=>t.total))} · ${(bg[b.id]||[]).length}x`]))}
 const pg=grp(ok,t=>t.payment_method);h+='<h3>Metode bayar</h3>'+bars(Object.entries(pg).map(([k,a])=>[PM[k]||k,sum(a,t=>t.total),`${rp(sum(a,t=>t.total))} · ${a.length}x`]));
@@ -61,7 +66,14 @@ const im={};ok.forEach(t=>(t.transaction_items||[]).forEach(i=>{const x=im[i.ite
 h+='<h3>Menu terlaris</h3><div class="tp">'+bars(Object.entries(im).sort((a,b)=>b[1].q-a[1].q).slice(0,10).map(([n,x])=>[n,x.q,`${x.q}x · ${rp(x.o)}`]))+'</div>';
 if(ex.length){const eg=grp(ex,e=>e.category);h+='<h3>Belanja per kategori</h3>'+bars(Object.entries(eg).map(([k,a])=>[EC[k]||esc(k),sum(a,e=>e.amount),rp(sum(a,e=>e.amount))]))+'<h3>Daftar belanja</h3>'+ex.slice().reverse().slice(0,30).map(e=>`<div class="b" style="grid-template-columns:50px 1fr auto"><span class="l">${new Date(e.created_at).toLocaleDateString('sv').slice(5)}</span><span>${esc(e.description)}</span><span class="v">${rp(e.amount)}</span></div>`).join('')}
 $('#out').innerHTML=h;renderCup();$('#st').textContent=''}catch(e){console.error(e);$('#out').innerHTML='<p class="err">Gagal memuat. Pastikan online, lalu pilih periode lagi.</p>';$('#st').textContent=''}}
-function renderCup(){const ok=LAST.ok,q={},p=$('#pr').value;
+async function loadStaff(){$('#st').textContent='Memuat...';try{const[a,b]=rg($('#pr').value),[r,cc]=await Promise.all([api('rpc/staff_report',{method:'POST',body:JSON.stringify({b:prof.branch_id,d1:a.toISOString(),d2:b.toISOString()})}),api('settings?key=eq.cupcats').catch(()=>[])]);
+const cats=r.cats||{},names=Object.keys(cats),saved=cc&&cc[0]?JSON.parse(cc[0].value):null,on=saved||names.filter(c=>!/makan|food|snack|roti|cemil/i.test(c)),cup=names.filter(c=>on.includes(c)).reduce((s,c)=>s+cats[c],0),ex=r.exp||[];
+let h=`<div class="k"><div class="split"><span><small>Transaksi</small><b>${r.trx}</b></span><span><small>Total cup</small><b>${cup}</b></span></div><div><small>Belanja</small><b>${rp(sum(ex,e=>e.amt))}</b></div></div>`;
+if(r.voided)h+=`<p class="mut">${r.voided} transaksi dibatalkan (tidak dihitung)</p>`;
+h+='<h3>Metode bayar</h3>'+bars(Object.entries(r.pay||{}).map(([k,v])=>[PM[k]||esc(k),v,rp(v)]));
+if(ex.length)h+='<h3>Daftar belanja</h3>'+ex.slice(0,50).map(e=>`<div class="b" style="grid-template-columns:50px 1fr auto"><span class="l">${new Date(e.at).toLocaleDateString('sv').slice(5)}</span><span>${esc(e.desc)} <small class="mut">· ${esc(e.by||'')}</small></span><span class="v">${rp(e.amt)}</span></div>`).join('');
+$('#out').innerHTML=h;$('#st').textContent=''}catch(e){console.error(e);$('#out').innerHTML='<p class="err">Gagal memuat. Pastikan online, lalu pilih periode lagi.</p>';$('#st').textContent=''}}
+function renderCup(){if(!$('#cup'))return;const ok=LAST.ok,q={},p=$('#pr').value;
 ok.forEach(t=>(t.transaction_items||[]).forEach(i=>{const c=CM[i.menu_item_id]||'Lainnya';q[c]=(q[c]||0)+i.qty}));
 const cats=Object.keys(q).sort(),saved=JSON.parse(localStorage.getItem('cupCats')||'null'),on=saved||cats.filter(c=>!/makan|food|snack|roti|cemil/i.test(c));
 const inCup=i=>on.includes(CM[i.menu_item_id]||'Lainnya'),tot=cats.filter(c=>on.includes(c)).reduce((a,c)=>a+q[c],0),tg=+localStorage.getItem('cupTarget_'+p+'_'+$('#bq').value)||0;
@@ -73,7 +85,7 @@ $('#cup').innerHTML=`<div class="k"><div><small>Total cup</small><b>${tot}</b></
 +cats.map(c=>`<label class="b" style="grid-template-columns:24px 1fr auto"><input type="checkbox" data-c="${esc(c)}" ${on.includes(c)?'checked':''}><span>${esc(c)}</span><span class="v">${q[c]}</span></label>`).join('')
 +(Object.keys(pk).length?'<p class="mut" style="margin:10px 0 2px">Cup per kasir:</p>'+bars(Object.entries(pk).sort((a,b)=>b[1]-a[1]).map(([n,v])=>[esc(n),v,v+' cup'])):'')}
 document.addEventListener('change',e=>{const t=e.target;if(t.id==='tg'){localStorage.setItem('cupTarget_'+$('#pr').value+'_'+$('#bq').value,t.value);renderCup()}
-if(t.dataset.c!==undefined){const cats=[...document.querySelectorAll('#cup [data-c]')],on=cats.filter(x=>x.checked).map(x=>x.dataset.c);localStorage.setItem('cupCats',JSON.stringify(on));renderCup()}});
+if(t.dataset.c!==undefined){const cats=[...document.querySelectorAll('#cup [data-c]')],on=cats.filter(x=>x.checked).map(x=>x.dataset.c);localStorage.setItem('cupCats',JSON.stringify(on));api('settings?on_conflict=key',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({key:'cupcats',value:JSON.stringify(on)})}).catch(()=>{});renderCup()}});
 const dl=(b,n)=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=n;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000)};
 const ld=src=>new Promise((ok,no)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=no;document.head.appendChild(s)});
 const dt=iso=>{const x=new Date(iso);return[x.toLocaleDateString('sv'),x.toTimeString().slice(0,5)]};
@@ -86,6 +98,9 @@ const E=ex.map(e=>{const[d,j]=dt(e.created_at);return{Cabang:bn[e.branch_id]||''
 const wb=XLSX.utils.book_new();[['Transaksi',T],['Item',I],['Belanja',E]].forEach(([n,r])=>XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(r),n));
 XLSX.writeFile(wb,`laporan-${$('#pr').value}-${new Date().toLocaleDateString('sv')}.xlsx`)}catch(e){console.error(e);alert('Gagal membuat Excel. Pastikan online.')}};
 $('#bk').onclick=async()=>{try{const o={exported_at:new Date().toISOString()};for(const t of['branches','profiles','menu_items','discounts','transactions','transaction_items','transaction_discounts','expenses'])o[t]=await allOf(t);dl(new Blob([JSON.stringify(o)],{type:'application/json'}),`backup-kasir-${new Date().toLocaleDateString('sv')}.json`)}catch(e){console.error(e);alert('Backup gagal. Pastikan online.')}};
-$('#pr').onchange=load;$('#bq').onchange=()=>{localStorage.setItem('dbr',$('#bq').value);load()};
+$('#pr').onchange=()=>{$('#rgb').classList.toggle('on',$('#pr').value==='range');load()};$('#d1').onchange=$('#d2').onchange=load;$('#d1').value=$('#d2').value=new Date().toLocaleDateString('sv');
+if(!OWN)['bq','xl','bk'].forEach(i=>$('#'+i).hidden=true);
+if(OWN)api('settings?key=eq.cupcats').then(r=>{if(r&&r[0]){localStorage.setItem('cupCats',r[0].value);renderCup()}else if(localStorage.getItem('cupCats'))api('settings?on_conflict=key',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({key:'cupcats',value:localStorage.getItem('cupCats')})})}).catch(()=>{});
+$('#bq').onchange=()=>{localStorage.setItem('dbr',$('#bq').value);load()};
 api('branches?order=name').then(b=>{BRS=b;$('#bq').innerHTML='<option value="all">Semua cabang</option>'+b.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('');$('#bq').value=localStorage.getItem('dbr')||'all';if(!$('#bq').value)$('#bq').value='all';load()}).catch(()=>{$('#bq').innerHTML='<option value="all">Semua cabang</option>';load()});
 </script></body></html>
